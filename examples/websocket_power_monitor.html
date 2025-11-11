@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CTP10 Power Monitor - WebSocket</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .control-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: inline-block;
+            width: 120px;
+            font-weight: bold;
+        }
+        input, select {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 200px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .btn-connect {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .btn-disconnect {
+            background-color: #f44336;
+            color: white;
+        }
+        .btn-connect:disabled, .btn-disconnect:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .status {
+            padding: 10px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+            text-align: center;
+            font-weight: bold;
+        }
+        .status.connected {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status.disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .channels {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+        }
+        .channel {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .channel-header {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #333;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 5px;
+        }
+        .channel-data {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .data-row {
+            display: flex;
+            justify-content: space-between;
+        }
+        .data-label {
+            font-weight: bold;
+            color: #666;
+        }
+        .data-value {
+            font-family: 'Courier New', monospace;
+            color: #000;
+        }
+        .power-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #4CAF50;
+        }
+        .timestamp {
+            text-align: center;
+            color: #999;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔌 CTP10 Real-Time Power Monitor</h1>
+
+    <div class="controls">
+        <div class="control-group">
+            <label for="apiUrl">API URL:</label>
+            <input type="text" id="apiUrl" value="ws://localhost:8002/ws/power" readonly>
+        </div>
+        <div class="control-group">
+            <label for="module">Module:</label>
+            <input type="number" id="module" value="4" min="1" max="20">
+        </div>
+        <div class="control-group">
+            <label for="interval">Interval (s):</label>
+            <input type="number" id="interval" value="0.1" min="0.01" max="10" step="0.01">
+        </div>
+        <div style="text-align: center; margin-top: 20px;">
+            <button class="btn-connect" id="connectBtn" onclick="connect()">Connect</button>
+            <button class="btn-disconnect" id="disconnectBtn" onclick="disconnect()" disabled>Disconnect</button>
+        </div>
+    </div>
+
+    <div class="status disconnected" id="status">
+        Disconnected
+    </div>
+
+    <div class="controls">
+        <div class="control-group">
+            <label>Module:</label>
+            <span id="module-display" style="font-weight: bold; color: #333;">-</span>
+        </div>
+        <div class="control-group">
+            <label>Wavelength:</label>
+            <span id="wavelength-display" style="font-weight: bold; color: #4CAF50;">-</span>
+        </div>
+        <div class="control-group">
+            <label>Unit:</label>
+            <span id="unit-display" style="font-weight: bold; color: #333;">-</span>
+        </div>
+    </div>
+
+    <div class="channels" id="channels-container">
+        <!-- Channels will be added dynamically -->
+    </div>
+
+    <div class="timestamp" id="timestamp"></div>
+
+    <script>
+        let ws = null;
+        const channelLabels = {
+            1: "IN1",
+            2: "IN2",
+            3: "TLS IN",
+            4: "OUT TO DUT"
+        };
+
+        function connect() {
+            const apiUrl = document.getElementById('apiUrl').value;
+            const module = document.getElementById('module').value;
+            const interval = document.getElementById('interval').value;
+
+            const url = `${apiUrl}?module=${module}&interval=${interval}`;
+
+            ws = new WebSocket(url);
+
+            ws.onopen = () => {
+                console.log('WebSocket connected');
+                updateStatus('connected');
+                document.getElementById('connectBtn').disabled = true;
+                document.getElementById('disconnectBtn').disabled = false;
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                updateChannels(data);
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                updateStatus('error');
+            };
+
+            ws.onclose = () => {
+                console.log('WebSocket disconnected');
+                updateStatus('disconnected');
+                document.getElementById('connectBtn').disabled = false;
+                document.getElementById('disconnectBtn').disabled = true;
+            };
+        }
+
+        function disconnect() {
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+        }
+
+        function updateStatus(status) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = `status ${status}`;
+            statusDiv.textContent = status.charAt(0).toUpperCase() + status.slice(1);
+        }
+
+        function updateChannels(snapshot) {
+            const container = document.getElementById('channels-container');
+            const timestampDiv = document.getElementById('timestamp');
+            const moduleDisplay = document.getElementById('module-display');
+            const wavelengthDisplay = document.getElementById('wavelength-display');
+            const unitDisplay = document.getElementById('unit-display');
+
+            // Update timestamp
+            const date = new Date(snapshot.timestamp * 1000);
+            timestampDiv.textContent = `Last update: ${date.toLocaleTimeString()}.${date.getMilliseconds()}`;
+
+            // Update module-level displays
+            moduleDisplay.textContent = snapshot.module;
+            wavelengthDisplay.textContent = `${snapshot.wavelength_nm.toFixed(4)} nm`;
+            unitDisplay.textContent = snapshot.unit;
+
+            // Map snapshot fields to channel data
+            const channelData = [
+                { channel: 1, power: snapshot.ch1_power, label: channelLabels[1] },
+                { channel: 2, power: snapshot.ch2_power, label: channelLabels[2] },
+                { channel: 3, power: snapshot.ch3_power, label: channelLabels[3] },
+                { channel: 4, power: snapshot.ch4_power, label: channelLabels[4] }
+            ];
+
+            // Create channels on first update, or update existing ones
+            channelData.forEach(ch => {
+                const channelId = `channel-${ch.channel}`;
+                let channelDiv = document.getElementById(channelId);
+
+                if (!channelDiv) {
+                    // Create new channel card
+                    channelDiv = document.createElement('div');
+                    channelDiv.id = channelId;
+                    channelDiv.className = 'channel';
+
+                    channelDiv.innerHTML = `
+                        <div class="channel-header">
+                            Channel ${ch.channel} - ${ch.label}
+                        </div>
+                        <div class="channel-data">
+                            <div class="data-row">
+                                <span class="data-label">Power:</span>
+                                <span class="data-value power-value" id="power-${ch.channel}">-</span>
+                            </div>
+                        </div>
+                    `;
+
+                    container.appendChild(channelDiv);
+                }
+
+                // Update only the power value
+                const powerSpan = document.getElementById(`power-${ch.channel}`);
+                if (powerSpan) {
+                    powerSpan.textContent = `${ch.power.toFixed(3)} ${snapshot.unit}`;
+                }
+            });
+        }
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (ws) {
+                ws.close();
+            }
+        });
+    </script>
+</body>
+</html>

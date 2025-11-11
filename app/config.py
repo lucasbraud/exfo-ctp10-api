@@ -14,7 +14,8 @@ class Settings(BaseSettings):
     # Default Configuration (from pymeasure-examples)
     DEFAULT_MODULE: int = 4  # SENSe module (1-20)
     DEFAULT_CHANNEL: int = 1  # Detector channel (1-6)
-    DEFAULT_RESOLUTION_PM: float = 10.0  # Wavelength sampling resolution (pm)
+    DEFAULT_RESOLUTION_PM: float = 0.1  # Wavelength sampling resolution (pm)
+    DEFAULT_WAVELENGTH_NM: float = 1310.0  # Default detector wavelength (nm)
     AUTO_CONNECT: bool = True
 
     # API Server

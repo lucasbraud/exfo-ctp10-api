@@ -80,14 +80,27 @@ class RLaserStatus(BaseModel):
 # ============================================================================
 
 
-class DetectorPowerReading(BaseModel):
-    """Detector power reading."""
+class DetectorSnapshot(BaseModel):
+    """
+    Snapshot of all 4 detector channels at a single point in time.
 
-    module: int
-    channel: int
-    power: float
-    unit: str = Field(description="'dBm' or 'mW' depending on detector.power_unit")
-    wavelength_nm: float = Field(description="Wavelength in nanometers")
+    Represents the state of an IL RL OPM2 detector module with channels:
+    - Channel 1: IN1
+    - Channel 2: IN2
+    - Channel 3: TLS IN
+    - Channel 4: OUT TO DUT
+    """
+
+    timestamp: float = Field(description="Unix timestamp when readings were taken")
+    module: int = Field(description="Detector module number (1-20)")
+    wavelength_nm: float = Field(description="Module wavelength (shared by all channels)")
+    unit: str = Field(description="Power unit: 'dBm' or 'mW'")
+
+    # Individual channel powers
+    ch1_power: float = Field(description="Channel 1 (IN1) power")
+    ch2_power: float = Field(description="Channel 2 (IN2) power")
+    ch3_power: float = Field(description="Channel 3 (TLS IN) power")
+    ch4_power: float = Field(description="Channel 4 (OUT TO DUT) power")
 
 
 class DetectorConfig(BaseModel):

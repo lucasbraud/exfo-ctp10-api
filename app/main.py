@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.manager import CTP10Manager
-from app.routers import connection, detector, measurement, tls, rlaser
+from app.routers import connection, detector, measurement, tls, rlaser, websocket
 
 # Configure logging
 logging.basicConfig(
@@ -40,6 +40,15 @@ async def lifespan(app: FastAPI):
         try:
             ctp = app.state.ctp10_manager.connect()
             logger.info(f"Auto-connect successful: {ctp.id}")
+
+            # Set default wavelength on detector module
+            try:
+                detector = ctp.detector(module=settings.DEFAULT_MODULE, channel=settings.DEFAULT_CHANNEL)
+                detector.wavelength_nm = settings.DEFAULT_WAVELENGTH_NM
+                logger.info(f"Set default wavelength to {settings.DEFAULT_WAVELENGTH_NM} nm on module {settings.DEFAULT_MODULE}")
+            except Exception as e:
+                logger.warning(f"Failed to set default wavelength: {e}")
+
         except Exception as e:
             logger.warning(f"Auto-connect failed: {e}")
             logger.info("API is still running for manual connect")
@@ -101,3 +110,4 @@ app.include_router(detector.router)
 app.include_router(measurement.router)
 app.include_router(tls.router)
 app.include_router(rlaser.router)
+app.include_router(websocket.router)

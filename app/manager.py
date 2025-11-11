@@ -1,5 +1,6 @@
 """CTP10 connection manager."""
 
+import asyncio
 import logging
 from typing import Optional
 
@@ -28,6 +29,7 @@ class CTP10Manager:
         self.timeout_ms = timeout_ms
         self._ctp: Optional[CTP10] = None
         self._connected = False
+        self._scpi_lock = asyncio.Lock()  # Serialize SCPI communication
 
     def connect(self) -> CTP10:
         """
@@ -99,6 +101,19 @@ class CTP10Manager:
         if not self.is_connected or self._ctp is None:
             raise RuntimeError("Not connected to CTP10. Call connect() first.")
         return self._ctp
+
+    @property
+    def scpi_lock(self) -> asyncio.Lock:
+        """
+        Get SCPI communication lock.
+
+        This lock must be acquired before any SCPI communication to prevent
+        concurrent access that causes response mixing.
+
+        Returns:
+            asyncio.Lock for serializing SCPI operations
+        """
+        return self._scpi_lock
 
     def __enter__(self):
         """Context manager entry - connect."""

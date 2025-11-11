@@ -1,5 +1,6 @@
 """Detector channel operations for CTP10."""
 
+import asyncio
 import io
 import logging
 from typing import Annotated
@@ -9,39 +10,104 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pymeasure.instruments.exfo import CTP10
 
 from app.config import settings
-from app.dependencies import get_ctp10
-from app.models import DetectorConfig, DetectorPowerReading, TraceDataResponse, TraceMetadata
+from app.dependencies import get_ctp10, get_ctp10_manager
+from app.manager import CTP10Manager
+from app.models import DetectorConfig, DetectorSnapshot, TraceDataResponse, TraceMetadata
 
 router = APIRouter(prefix="/detector", tags=["Detector"])
 logger = logging.getLogger(__name__)
 
 
-@router.get("/power", response_model=DetectorPowerReading)
-async def read_power(
-    ctp: Annotated[CTP10, Depends(get_ctp10)],
-    module: int = Query(default=settings.DEFAULT_MODULE, ge=1, le=20),
-    channel: int = Query(default=settings.DEFAULT_CHANNEL, ge=1, le=6),
-):
+async def _read_single_channel_power(ctp: CTP10, module: int, channel: int, lock: asyncio.Lock) -> tuple[int, float] | None:
     """
-    Read instantaneous power from detector channel.
+    Helper function to read power from a single channel (thread-safe and SCPI-safe).
 
-    Returns power in the currently configured unit (dBm or mW) and wavelength.
+    The lock ensures SCPI communication is serialized to prevent response mixing.
+
+    Returns:
+        Tuple of (channel, power) or None if read failed
     """
     try:
-        detector = ctp.detector(module=module, channel=channel)
-        power = detector.power
-        unit = detector.power_unit
-        wavelength_nm = detector.wavelength_nm
+        async with lock:
+            # All SCPI communication happens within the lock
+            detector = await asyncio.to_thread(ctp.detector, module=module, channel=channel)
+            power = await asyncio.to_thread(lambda: detector.power)
 
-        return DetectorPowerReading(
-            module=module,
-            channel=channel,
-            power=power,
-            unit=unit,
-            wavelength_nm=wavelength_nm
-        )
+        return (channel, power)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to read power: {str(e)}")
+        logger.warning(f"Failed to read channel {channel}: {e}")
+        return None
+
+
+@router.get("/snapshot", response_model=DetectorSnapshot)
+async def get_detector_snapshot(
+    ctp: Annotated[CTP10, Depends(get_ctp10)],
+    manager: Annotated[CTP10Manager, Depends(get_ctp10_manager)],
+    module: int = Query(default=settings.DEFAULT_MODULE, ge=1, le=20),
+):
+    """
+    Get a snapshot of all 4 detector channels at once.
+
+    Returns a time-synchronized reading of all channels with module-level metadata.
+    This is the primary endpoint for monitoring detector power.
+
+    Channel mapping (IL RL OPM2 module):
+    - ch1_power: Channel 1 (IN1)
+    - ch2_power: Channel 2 (IN2)
+    - ch3_power: Channel 3 (TLS IN)
+    - ch4_power: Channel 4 (OUT TO DUT)
+
+    Example response:
+    {
+        "timestamp": 1609175.828,
+        "module": 4,
+        "wavelength_nm": 1310.0,
+        "unit": "dBm",
+        "ch1_power": -17.85,
+        "ch2_power": -21.56,
+        "ch3_power": 6.94,
+        "ch4_power": -60.12
+    }
+    """
+    try:
+        lock = manager.scpi_lock
+        timestamp = asyncio.get_event_loop().time()
+
+        # Read module-level properties once (shared by all channels)
+        async with lock:
+            detector_ref = await asyncio.to_thread(ctp.detector, module=module, channel=1)
+            wavelength_nm = await asyncio.to_thread(lambda: detector_ref.wavelength_nm)
+            unit = await asyncio.to_thread(lambda: detector_ref.power_unit)
+
+        # Read all 4 channels concurrently with lock protection
+        channels = [1, 2, 3, 4]
+        tasks = [_read_single_channel_power(ctp, module, ch, lock) for ch in channels]
+        results = await asyncio.gather(*tasks)
+
+        # Build power dict
+        powers = {ch: pwr for ch, pwr in results if results is not None}
+
+        if len(powers) != 4:
+            missing = set(channels) - set(powers.keys())
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to read all channels. Missing: {missing}"
+            )
+
+        return DetectorSnapshot(
+            timestamp=timestamp,
+            module=module,
+            wavelength_nm=wavelength_nm,
+            unit=unit,
+            ch1_power=powers[1],
+            ch2_power=powers[2],
+            ch3_power=powers[3],
+            ch4_power=powers[4],
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get detector snapshot: {str(e)}")
 
 
 @router.get("/config")

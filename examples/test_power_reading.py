@@ -61,34 +61,34 @@ def main():
         f"{API_BASE}/detector/power",
         params={
             "module": MODULE,
-            "channel": DEFAULT_CHANNEL
+            "channels": str(DEFAULT_CHANNEL)  # Returns array with single element
         }
     )
     response.raise_for_status()
 
-    reading = response.json()
+    readings = response.json()
+    reading = readings[0]  # Get first element from array
     print(f"  Module: {reading['module']}")
     print(f"  Channel: {reading['channel']}")
     print(f"  Power: {reading['power']:.3f} {reading['unit']}")
     print(f"  Wavelength: {reading['wavelength_nm']:.4f} nm")
 
-    # 4. Read power from multiple channels
-    channels_to_read = [1, 2, 3, 4]
-    print(f"\nReading power from channels {channels_to_read} on Module {MODULE}...")
-    for ch in channels_to_read:
-        try:
-            response = requests.get(
-                f"{API_BASE}/detector/power",
-                params={
-                    "module": MODULE,
-                    "channel": ch
-                }
-            )
-            response.raise_for_status()
-            reading = response.json()
-            print(f"  {channel_label(ch)} (Channel {ch}): {reading['power']:.2f} {reading['unit']} @ {reading['wavelength_nm']:.2f} nm")
-        except Exception as e:
-            print(f"  Channel {ch}: Error - {e}")
+    # 4. Read power from multiple channels using single endpoint
+    channels_to_read = "1,2,3,4"
+    print(f"\nReading power from channels {channels_to_read} on Module {MODULE} (single request)...")
+    response = requests.get(
+        f"{API_BASE}/detector/power/channels",
+        params={
+            "module": MODULE,
+            "channels": channels_to_read
+        }
+    )
+    response.raise_for_status()
+    readings = response.json()
+
+    for reading in readings:
+        ch = reading['channel']
+        print(f"  {channel_label(ch)} (Channel {ch}): {reading['power']:.2f} {reading['unit']} @ {reading['wavelength_nm']:.2f} nm")
 
     # 5. Continuous monitoring (10 readings)
     print(f"\nMonitoring power from {channel_label(DEFAULT_CHANNEL)} (10 samples)...")
