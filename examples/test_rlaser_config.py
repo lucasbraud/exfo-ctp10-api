@@ -20,7 +20,7 @@ Date: November 10, 2025
 import requests
 
 # API Configuration
-API_BASE = "http://localhost:8002"
+API_BASE = "http://localhost:8000"
 LASER_NUMBER = 2  # Reference laser number (1-10)
                   # Laser 1 = C-band laser (may not be present)
                   # Laser 2 = O-band laser

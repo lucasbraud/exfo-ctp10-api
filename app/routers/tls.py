@@ -33,7 +33,7 @@ async def get_tls_config(
     """
     Get TLS channel configuration.
 
-    Returns wavelength range, sweep speed, power, and trigger for TLS channel (1-4).
+    Returns wavelength range, sweep speed, power, trigger, and identifier for TLS channel (1-4).
     """
     try:
         tls = _get_tls_channel(ctp, channel)
@@ -44,7 +44,8 @@ async def get_tls_config(
             "stop_wavelength_nm": tls.stop_wavelength_nm,
             "sweep_speed_nmps": tls.sweep_speed_nmps,
             "laser_power_dbm": tls.laser_power_dbm,
-            "trigin": tls.trigin
+            "trigin": tls.trigin,
+            "identifier": tls.identifier
         }
     except Exception as e:
         raise HTTPException(
@@ -62,7 +63,7 @@ async def set_tls_config(
     """
     Configure TLS channel parameters.
 
-    Sets wavelength range, sweep speed, power, and trigger for TLS channel (1-4).
+    Sets wavelength range, sweep speed, power, trigger, and identifier for TLS channel (1-4).
     Only provided parameters will be updated.
     """
     try:
@@ -83,6 +84,9 @@ async def set_tls_config(
 
         if config.trigin is not None:
             tls.trigin = config.trigin
+
+        if config.identifier is not None:
+            tls.identifier = config.identifier
 
         return {
             "success": True,

@@ -8,9 +8,10 @@ import time
 class FakeDetector:
     """Mock detector channel for CTP10."""
 
-    def __init__(self, module: int, channel: int):
+    def __init__(self, module: int, channel: int, ctp10_instance=None):
         self.module = module
         self.channel = channel
+        self.ctp10 = ctp10_instance  # Reference to parent CTP10 instance
         self._wavelength_nm = 1310.0
         self._power = -15.5 + (channel * 2.3)  # Varied power per channel
         self._power_unit = "dBm"
@@ -68,14 +69,26 @@ class FakeDetector:
 
     def start_wavelength_nm(self, trace_type: int = 1) -> float:
         """Get trace start wavelength."""
+        # Use TLS1 start wavelength if available
+        if self.ctp10 and hasattr(self.ctp10, 'tls1'):
+            return self.ctp10.tls1.start_wavelength_nm
         return 1460.0
 
     def get_data_x(self, trace_type: int = 1, unit: str = 'M', format: str = 'BIN') -> np.ndarray:
         """Get wavelength data."""
-        # Generate mock wavelength array
+        # Generate mock wavelength array using TLS configuration
         num_points = self.length(trace_type)
-        start_m = 1460e-9  # 1460 nm in meters
-        stop_m = 1640e-9   # 1640 nm in meters
+        
+        # Get start/stop from TLS1 if available
+        if self.ctp10 and hasattr(self.ctp10, 'tls1'):
+            start_nm = self.ctp10.tls1.start_wavelength_nm
+            stop_nm = self.ctp10.tls1.stop_wavelength_nm
+        else:
+            start_nm = 1460.0
+            stop_nm = 1640.0
+        
+        start_m = start_nm * 1e-9  # Convert to meters
+        stop_m = stop_nm * 1e-9
         return np.linspace(start_m, stop_m, num_points)
 
     def get_data_y(self, trace_type: int = 1, unit: str = 'DB', format: str = 'BIN') -> np.ndarray:
@@ -97,6 +110,7 @@ class FakeTLS:
         self._sweep_speed_nmps = 50
         self._laser_power_dbm = 5.0
         self._trigin = 0
+        self._identifier = 1  # Default to C-band
 
     @property
     def start_wavelength_nm(self) -> float:
@@ -137,6 +151,14 @@ class FakeTLS:
     @trigin.setter
     def trigin(self, value: int):
         self._trigin = value
+
+    @property
+    def identifier(self) -> int:
+        return self._identifier
+
+    @identifier.setter
+    def identifier(self, value: int):
+        self._identifier = value
 
 
 class FakeRLaser:
@@ -246,7 +268,7 @@ class FakeCTP10:
 
     def detector(self, module: int, channel: int) -> FakeDetector:
         """Get detector channel object."""
-        return FakeDetector(module, channel)
+        return FakeDetector(module, channel, ctp10_instance=self)
 
     @property
     def resolution_pm(self) -> float:

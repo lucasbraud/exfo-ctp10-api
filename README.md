@@ -203,9 +203,7 @@ The `examples/` directory contains usage examples:
 fastapi dev app/main.py
 
 # In another terminal, run examples
-python examples/test_snapshot.py          # Quick power snapshot
-python examples/test_power_reading.py     # Monitor power
-python examples/test_tls_sweep.py         # Configure and sweep
+python examples/test_snapshot.py          # 4-channel power snapshot
 python examples/test_trace_retrieval.py   # Get full trace data
 python examples/debug_websocket.py        # WebSocket streaming
 ```

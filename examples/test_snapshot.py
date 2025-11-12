@@ -1,16 +1,22 @@
 #!/usr/bin/env python3
 """
-Test the new simplified detector snapshot API.
+EXFO CTP10 API - Detector Snapshot Example
+
+Demonstrates the simplified 4-channel power snapshot API endpoint.
+Gets all 4 detector channels (IN1, IN2, TLS IN, OUT TO DUT) in a single request.
+
+This is the simplest way to read power from all channels.
 """
 import requests
 import time
 
-API_BASE = "http://localhost:8002"
+API_BASE = "http://localhost:8000"
 
 def main():
-    print("Testing GET /detector/snapshot endpoint...\n")
+    print("EXFO CTP10 - 4-Channel Power Snapshot\n")
+    print("=" * 60)
 
-    # Single request gets all 4 channels
+    # Get single snapshot (all 4 channels)
     response = requests.get(f"{API_BASE}/detector/snapshot")
     response.raise_for_status()
 

@@ -45,11 +45,12 @@ class ConditionRegister(BaseModel):
 class TLSConfig(BaseModel):
     """TLS channel configuration."""
 
-    start_wavelength_nm: Optional[float] = Field(None, ge=1460.0, le=1640.0)
-    stop_wavelength_nm: Optional[float] = Field(None, ge=1460.0, le=1640.0)
+    start_wavelength_nm: Optional[float] = Field(None, ge=1260.0, le=1640.0)
+    stop_wavelength_nm: Optional[float] = Field(None, ge=1260.0, le=1640.0)
     sweep_speed_nmps: Optional[int] = Field(None, ge=5, le=200)
     laser_power_dbm: Optional[float] = Field(None, ge=-10.0, le=10.0)
     trigin: Optional[int] = Field(None, ge=0, le=8, description="Trigger input (0=none, 1-8=TRIG IN port)")
+    identifier: Optional[int] = Field(None, ge=1, le=2, description="Laser identifier (1=C-band, 2=O-band)")
 
 
 # ============================================================================
@@ -108,6 +109,10 @@ class DetectorConfig(BaseModel):
 
     power_unit: Optional[str] = Field(None, description="'DBM' or 'MW'")
     spectral_unit: Optional[str] = Field(None, description="'WAV' (nm) or 'FREQ' (THz)")
+    resolution_pm: Optional[float] = Field(
+        None,
+        description="Wavelength sampling resolution (pm). Standard: 1-250, High-res: 0.02-0.5. Note: This is a global setting."
+    )
 
 
 class TraceMetadata(BaseModel):
@@ -117,8 +122,6 @@ class TraceMetadata(BaseModel):
     channel: int
     trace_type: int = Field(description="1=TF live, 11=Raw live, 12=Raw ref, 13=Quick ref")
     num_points: int
-    sampling_pm: float = Field(description="Resolution in picometers")
-    start_wavelength_nm: float
     unit: str = Field(description="'dBm' or 'mW'")
 
 
@@ -138,10 +141,6 @@ class TraceDataResponse(BaseModel):
 class SweepConfig(BaseModel):
     """Global sweep configuration."""
 
-    resolution_pm: Optional[float] = Field(
-        None,
-        description="Wavelength sampling resolution (pm). Standard: 1-250, High-res: 0.02-0.5"
-    )
     stabilization_output: Optional[bool] = Field(
         None, description="Laser output after scan (False=OFF, True=ON)"
     )
