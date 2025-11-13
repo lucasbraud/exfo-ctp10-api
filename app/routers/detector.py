@@ -116,7 +116,7 @@ async def get_detector_config(
     module: int = Query(default=settings.DEFAULT_MODULE, ge=1, le=20),
     channel: int = Query(default=settings.DEFAULT_CHANNEL, ge=1, le=6),
 ):
-    """Get detector configuration (units, trigger)."""
+    """Get detector configuration (units, resolution)."""
     try:
         logger.debug(f"Getting detector config for module={module}, channel={channel}")
         detector = ctp.detector(module=module, channel=channel)
@@ -142,6 +142,13 @@ async def get_detector_config(
             logger.warning(f"Failed to get spectral_unit: {e}")
             config["spectral_unit"] = None
 
+        try:
+            config["resolution_pm"] = ctp.resolution_pm
+            logger.debug(f"Got resolution_pm: {config['resolution_pm']}")
+        except Exception as e:
+            logger.warning(f"Failed to get resolution_pm: {e}")
+            config["resolution_pm"] = None
+
         return config
     except Exception as e:
         logger.error(f"Failed to get detector config: {e}", exc_info=True)
@@ -155,7 +162,7 @@ async def set_detector_config(
     module: int = Query(default=settings.DEFAULT_MODULE, ge=1, le=20),
     channel: int = Query(default=settings.DEFAULT_CHANNEL, ge=1, le=6),
 ):
-    """Set detector configuration (units)."""
+    """Set detector configuration (units, resolution)."""
     try:
         detector = ctp.detector(module=module, channel=channel)
 
@@ -164,6 +171,10 @@ async def set_detector_config(
 
         if config.spectral_unit is not None:
             detector.spectral_unit = config.spectral_unit
+
+        if config.resolution_pm is not None:
+            # Resolution is a global setting on the CTP10
+            ctp.resolution_pm = config.resolution_pm
 
         return {
             "success": True,
@@ -206,10 +217,7 @@ async def get_trace_metadata(
     """
     try:
         detector = ctp.detector(module=module, channel=channel)
-
         num_points = detector.length(trace_type=trace_type)
-        sampling_pm = detector.sampling_pm(trace_type=trace_type)
-        start_wavelength_nm = detector.start_wavelength_nm(trace_type=trace_type)
         unit = detector.power_unit
 
         return TraceMetadata(
@@ -217,8 +225,6 @@ async def get_trace_metadata(
             channel=channel,
             trace_type=trace_type,
             num_points=num_points,
-            sampling_pm=sampling_pm,
-            start_wavelength_nm=start_wavelength_nm,
             unit=unit
         )
     except Exception as e:
@@ -243,8 +249,6 @@ async def get_trace_data_json(
 
         # Get metadata
         num_points = detector.length(trace_type=trace_type)
-        sampling_pm = detector.sampling_pm(trace_type=trace_type)
-        start_wavelength_nm = detector.start_wavelength_nm(trace_type=trace_type)
         unit = detector.power_unit
 
         # Get trace data (binary format for speed, convert to lists for JSON)
@@ -260,8 +264,6 @@ async def get_trace_data_json(
             channel=channel,
             trace_type=trace_type,
             num_points=num_points,
-            sampling_pm=sampling_pm,
-            start_wavelength_nm=start_wavelength_nm,
             unit=unit
         )
 

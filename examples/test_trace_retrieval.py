@@ -26,7 +26,7 @@ import matplotlib.pyplot as plt
 import io
 
 # API Configuration
-API_BASE = "http://localhost:8002"
+API_BASE = "http://localhost:8000"
 MODULE = 4  # Module number (SENSe[1-20])
 CHANNEL = 1  # Detector channel (CHANnel[1-6])
 
@@ -40,38 +40,26 @@ def main():
     response.raise_for_status()
     print(f"Connected: {response.json()['instrument_id']}\n")
 
-    # 2. Read current sweep configuration
-    print("Current sweep configuration:")
-    response = requests.get(f"{API_BASE}/measurement/config")
-    response.raise_for_status()
-    config = response.json()
-    print(f"  Resolution: {config['resolution_pm']:.2f} pm")
-    print(f"  Stabilization output: {config['stabilization_output']}")
-    print(f"  Stabilization duration: {config['stabilization_duration']} s")
-
-    # Get TLS1 configuration
-    response = requests.get(f"{API_BASE}/tls/1/config")
-    response.raise_for_status()
-    tls_config = response.json()
-    print(f"  TLS1 Start: {tls_config['start_wavelength_nm']:.2f} nm")
-    print(f"  TLS1 Stop: {tls_config['stop_wavelength_nm']:.2f} nm")
-    print(f"  TLS1 Speed: {tls_config['sweep_speed_nmps']} nm/s")
-    print(f"  TLS1 Power: {tls_config['laser_power_dbm']:.2f} dBm")
-
-    # 3. Initiate sweep and wait for completion
-    print("\nInitiating sweep...")
-    response = requests.post(
-        f"{API_BASE}/measurement/sweep/start",
-        params={"wait": True}  # Block until complete
-    )
+    # 2. Configure TLS1 parameters
+    print("Configuring TLS1...")
+    tls_config = {
+        "start_wavelength_nm": 1262.5,
+        "stop_wavelength_nm": 1355.0,
+        "sweep_speed_nmps": 20,
+            "laser_power_dbm": 10.0,
+            "trigin": 2,
+            "identifier": 2  # O-band laser
+    }
+    response = requests.post(f"{API_BASE}/tls/1/config", json=tls_config)
     response.raise_for_status()
     print(f"  {response.json()['message']}")
 
-    # 4. Configure detector settings
-    print(f"\nConfiguring detector (Module {MODULE}, Channel {CHANNEL})...")
+    # 3. Configure detector settings (including resolution)
+    print("Configuring detector settings...")
     detector_config = {
         "power_unit": "DBM",
-        "spectral_unit": "WAV"
+        "spectral_unit": "WAV",
+        "resolution_pm": 0.1
     }
     response = requests.post(
         f"{API_BASE}/detector/config",
@@ -84,19 +72,71 @@ def main():
     response.raise_for_status()
     print(f"  {response.json()['message']}")
 
-    # 5. Get detector power measurement
+    # 4. Enable stabilization output (True)
+    print("\nConfiguring stabilization (laser output after scan)...")
+    response = requests.post(
+        f"{API_BASE}/measurement/config",
+        json={
+            "stabilization_output": True,
+            "stabilization_duration": 0.0
+        }
+    )
+    response.raise_for_status()
+    print(f"  {response.json()['message']}")
+
+    # 5. Read current sweep configuration
+    print("\nCurrent sweep configuration:")
+    
+    # Get detector config (includes resolution)
     response = requests.get(
-        f"{API_BASE}/detector/power",
+        f"{API_BASE}/detector/config",
         params={
             "module": MODULE,
             "channel": CHANNEL
         }
     )
     response.raise_for_status()
-    power_reading = response.json()
-    print(f"  Current power: {power_reading['power']:.2f} {power_reading['unit']}")
+    detector_config = response.json()
+    print(f"  Resolution: {detector_config['resolution_pm']:.2f} pm")
+    
+    # Get measurement config (stabilization)
+    response = requests.get(f"{API_BASE}/measurement/config")
+    response.raise_for_status()
+    config = response.json()
+    print(f"  Stabilization output: {config['stabilization_output']}")
+    print(f"  Stabilization duration: {config['stabilization_duration']} s")
 
-    # 6. Get trace metadata before downloading
+    # Get TLS1 configuration
+    response = requests.get(f"{API_BASE}/tls/1/config")
+    response.raise_for_status()
+    tls_config = response.json()
+    print(f"  TLS1 Start: {tls_config['start_wavelength_nm']:.2f} nm")
+    print(f"  TLS1 Stop: {tls_config['stop_wavelength_nm']:.2f} nm")
+    print(f"  TLS1 Speed: {tls_config['sweep_speed_nmps']} nm/s")
+    print(f"  TLS1 Power: {tls_config['laser_power_dbm']:.2f} dBm")
+    print(f"  TLS1 Trigger Input: {tls_config['trigin']}")
+    print(f"  TLS1 Identifier: {tls_config['identifier']} ({'C-band' if tls_config['identifier'] == 1 else 'O-band'})")
+
+    # 6. Initiate sweep and wait for completion
+    print("\nInitiating sweep...")
+    response = requests.post(
+        f"{API_BASE}/measurement/sweep/start",
+        params={"wait": True}  # Block until complete
+    )
+    response.raise_for_status()
+    print(f"  {response.json()['message']}")
+
+    # 7. Get detector power snapshot
+    print(f"\nGetting detector power snapshot (Module {MODULE}, Channel {CHANNEL})...")
+    response = requests.get(
+        f"{API_BASE}/detector/snapshot",
+        params={"module": MODULE}
+    )
+    response.raise_for_status()
+    snapshot = response.json()
+    print(f"  Current power (CH{CHANNEL}): {snapshot[f'ch{CHANNEL}_power']:.2f} {snapshot['unit']}")
+
+        # 7. Get trace metadata before downloading
     print("\nAccessing trace metadata...")
     trace_types = [
         (1, "TF live"),
@@ -117,10 +157,11 @@ def main():
         metadata = response.json()
         print(f"  - {trace_name} (trace_type={trace_type})")
         print(f"    Length: {metadata['num_points']} points")
-        print(f"    Sampling: {metadata['sampling_pm']:.2f} pm")
-        print(f"    Start wavelength: {metadata['start_wavelength_nm']:.4f} nm")
+    # Sampling omitted; resolution is reported in detector config
 
-    # 7. Download trace data in binary format (efficient)
+    # 8. Download trace data in binary format (efficient)
+
+    # 8. Download trace data in binary format (efficient)
     print("\nDownloading trace data in binary format...")
     print("  Note: Large dataset (~940k points), using binary NPY format...")
 
@@ -155,7 +196,7 @@ def main():
         values = trace_data["values"]
         print(f"  {trace_name} power range: {values.min():.2f} to {values.max():.2f} dB")
 
-    # 8. Optional: Create reference trace
+    # 9. Optional: Create reference trace
     # print("\nCreating reference trace...")
     # response = requests.post(
     #     f"{API_BASE}/detector/reference",
@@ -167,7 +208,7 @@ def main():
     # response.raise_for_status()
     # print(f"  {response.json()['message']}")
 
-    # 9. Plot the results
+    # 10. Plot the results
     print("\nGenerating plot...")
     plt.figure(figsize=(14, 7))
 

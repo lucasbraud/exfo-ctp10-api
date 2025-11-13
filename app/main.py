@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.manager import CTP10Manager
+from app.factory import create_ctp10_manager
 from app.routers import connection, detector, measurement, tls, rlaser, websocket
 
 # Configure logging
@@ -26,17 +26,12 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Initialize and cleanup on startup/shutdown"""
     logger.info("Starting EXFO CTP10 API...")
-    logger.info(f"CTP10 address: {settings.ctp10_address}")
 
-    # Initialize manager and store in app state
-    app.state.ctp10_manager = CTP10Manager(
-        address=settings.ctp10_address,
-        timeout_ms=settings.CTP10_TIMEOUT_MS
-    )
-    logger.info("CTP10 manager initialized")
+    # Create manager (real or mock based on MOCK_MODE setting)
+    app.state.ctp10_manager = create_ctp10_manager()
 
-    # Optionally auto-connect to CTP10 on startup
-    if settings.AUTO_CONNECT:
+    # Auto-connect only if NOT in mock mode (mock is already "connected")
+    if settings.AUTO_CONNECT and not settings.MOCK_MODE:
         try:
             ctp = app.state.ctp10_manager.connect()
             logger.info(f"Auto-connect successful: {ctp.id}")
@@ -57,7 +52,7 @@ async def lifespan(app: FastAPI):
 
     # Cleanup
     logger.info("Shutting down EXFO CTP10 API...")
-    if app.state.ctp10_manager.is_connected:
+    if app.state.ctp10_manager.is_connected and not settings.MOCK_MODE:
         app.state.ctp10_manager.disconnect()
         logger.info("Disconnected from CTP10")
 

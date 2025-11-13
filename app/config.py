@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     DEFAULT_WAVELENGTH_NM: float = 1310.0  # Default detector wavelength (nm)
     AUTO_CONNECT: bool = True
 
+    # Mock Mode (for testing without hardware)
+    MOCK_MODE: bool = False  # Set to True to use FakeCTP10 instead of real hardware
+
     # API Server
     API_HOST: str = "0.0.0.0"
     API_PORT: int = 8002

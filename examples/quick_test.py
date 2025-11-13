@@ -12,7 +12,7 @@ import requests
 import sys
 
 # API Configuration
-API_BASE = "http://localhost:8002"
+API_BASE = "http://localhost:8000"
 
 # Test configuration
 MODULE = 4
@@ -102,15 +102,19 @@ def test_detector():
         print(f"  Power unit: {data['power_unit']}")
         print(f"  Spectral unit: {data['spectral_unit']}")
 
-        # Read power
+        # Get 4-channel snapshot
         response = requests.get(
-            f"{API_BASE}/detector/power",
-            params={"module": MODULE, "channel": CHANNEL}
+            f"{API_BASE}/detector/snapshot",
+            params={"module": MODULE}
         )
         response.raise_for_status()
-        data = response.json()
-        print(f"✓ Detector power: {data['power']:.3f} {data['unit']}")
-        print(f"  Wavelength: {data['wavelength_nm']:.4f} nm")
+        snapshot = response.json()
+        print(f"✓ Detector snapshot (4 channels):")
+        print(f"  CH1: {snapshot['ch1_power']:.3f} {snapshot['unit']}")
+        print(f"  CH2: {snapshot['ch2_power']:.3f} {snapshot['unit']}")
+        print(f"  CH3: {snapshot['ch3_power']:.3f} {snapshot['unit']}")
+        print(f"  CH4: {snapshot['ch4_power']:.3f} {snapshot['unit']}")
+        print(f"  Wavelength: {snapshot['wavelength_nm']:.4f} nm")
 
         return True
     except Exception as e:
@@ -268,7 +272,7 @@ def main():
     except requests.exceptions.ConnectionError:
         print(f"✗ ERROR: Cannot connect to API server at {API_BASE}")
         print("  Make sure the API server is running:")
-        print("  → fastapi dev app/main.py --port 8002")
+        print("  → fastapi dev app/main.py")
         sys.exit(1)
     except Exception as e:
         print(f"✗ ERROR: Unexpected error: {e}")

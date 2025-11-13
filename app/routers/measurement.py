@@ -95,7 +95,7 @@ async def set_stabilization(
 
 @router.get("/config")
 async def get_sweep_config(ctp: Annotated[CTP10, Depends(get_ctp10)]):
-    """Get current sweep configuration including resolution and stabilization."""
+    """Get current sweep configuration (stabilization settings only)."""
     try:
         # Get stabilization settings (returns tuple)
         try:
@@ -106,7 +106,6 @@ async def get_sweep_config(ctp: Annotated[CTP10, Depends(get_ctp10)]):
             stab_output_bool, stab_duration = None, None
 
         return {
-            "resolution_pm": ctp.resolution_pm,
             "stabilization_output": stab_output_bool,
             "stabilization_duration": stab_duration
         }
@@ -120,14 +119,12 @@ async def set_sweep_config(
     ctp: Annotated[CTP10, Depends(get_ctp10)]
 ):
     """
-    Set sweep configuration (resolution and/or stabilization).
+    Set sweep configuration (stabilization only).
 
     All parameters are optional - only provided values will be updated.
+    Note: Resolution is now configured via /detector/config endpoint.
     """
     try:
-        if config.resolution_pm is not None:
-            ctp.resolution_pm = config.resolution_pm
-
         if config.stabilization_output is not None and config.stabilization_duration is not None:
             # Convert boolean to integer (0 or 1) for the device
             stab_output_int = 1 if config.stabilization_output else 0

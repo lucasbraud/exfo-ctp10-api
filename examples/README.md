@@ -11,44 +11,41 @@ pip install requests numpy matplotlib
 
 ## API Configuration
 
-All examples assume the API is running locally on port 8002. Update the `API_BASE` constant in each script if your configuration differs:
+All examples assume the API is running locally on port 8000 (FastAPI dev default). Update the `API_BASE` constant in each script if your configuration differs:
 
 ```python
-API_BASE = "http://localhost:8002"
+API_BASE = "http://localhost:8000"
 ```
 
 ### Starting the API
 
 ```bash
 # From the exfo-ctp10-api directory
+fastapi dev app/main.py
+
+# Or with custom port
 fastapi dev app/main.py --port 8002
 ```
 
 ## Example Scripts
 
-### 1. `test_power_reading.py`
+### 1. `test_snapshot.py`
 
-**Purpose**: Demonstrates power measurement from detector channels.
-
-**Based on**: `pymeasure-examples/exfo/exfo_ctp10_power_measurement_example.py`
+**Purpose**: Demonstrates the simplified 4-channel power snapshot API.
 
 **Features**:
-- Connect to CTP10 via API
-- Read detector configuration (power unit, spectral unit, trigger)
-- Read single power measurement
-- Read power from multiple channels (1-4)
-- Continuous power monitoring (10 samples)
+- Get all 4 channel power readings in a single request
+- Continuous power monitoring (5 samples)
 - Channel mapping: IN1, IN2, TLS IN, OUT TO DUT
+- Simplest way to read detector power
 
 **Usage**:
 ```bash
-python examples/test_power_reading.py
+python examples/test_snapshot.py
 ```
 
 **Key Endpoints Used**:
-- `POST /connection/connect` - Connect to instrument
-- `GET /detector/config` - Get detector configuration
-- `GET /detector/power` - Read instantaneous power
+- `GET /detector/snapshot` - Get 4-channel power snapshot
 
 ---
 
@@ -99,52 +96,7 @@ values = data['values']  # dB
 
 ---
 
-### 3. `test_tls_sweep.py`
-
-**Purpose**: Demonstrates TLS configuration and sweep control.
-
-**Based on**: `pymeasure-examples/exfo/exfo_ctp10_detector_example.py`
-
-**Features**:
-- Connect to CTP10 via API
-- Get current TLS configuration
-- Configure TLS channel (wavelength range, speed, power, trigger)
-- Configure sweep parameters (resolution, stabilization)
-- Start sweep (non-blocking)
-- Monitor sweep status in real-time
-- Abort sweep (optional)
-- Set individual TLS parameters (wavelength, power, speed, trigger)
-- Check instrument condition register
-
-**TLS Channels**: 1-4 (access via API endpoint path parameter)
-
-**Trigger Options**:
-- `trigin=0`: Software trigger
-- `trigin=1-8`: TRIG IN port number
-
-**Usage**:
-```bash
-python examples/test_tls_sweep.py
-```
-
-**Key Endpoints Used**:
-- `POST /connection/connect` - Connect to instrument
-- `GET /tls/{channel}/config` - Get TLS configuration
-- `POST /tls/{channel}/config` - Configure TLS parameters
-- `GET /measurement/config` - Get sweep configuration
-- `POST /measurement/config` - Configure sweep parameters
-- `POST /measurement/sweep/start?wait=false` - Start sweep (non-blocking)
-- `GET /measurement/sweep/status` - Monitor sweep progress
-- `POST /measurement/sweep/abort` - Abort sweep
-- `POST /tls/{channel}/wavelength` - Set wavelength range
-- `POST /tls/{channel}/power` - Set laser power
-- `POST /tls/{channel}/speed` - Set sweep speed
-- `POST /tls/{channel}/trigger` - Set trigger input
-- `GET /connection/condition` - Get condition register
-
----
-
-### 4. `test_rlaser_config.py`
+### 3. `test_rlaser_config.py`
 
 **Purpose**: Demonstrates reference laser configuration and control.
 
@@ -270,7 +222,7 @@ values = data['values']
 ## Troubleshooting
 
 ### Connection Issues
-- Ensure the API server is running: `fastapi dev app/main.py --port 8002`
+- Ensure the API server is running: `fastapi dev app/main.py`
 - Check the CTP10 IP address in `app/.env` or `app/config.py`
 - Verify network connectivity to the CTP10
 
@@ -288,7 +240,7 @@ values = data['values']
 Access the interactive API documentation (Swagger UI) when the server is running:
 
 ```
-http://localhost:8002/docs
+http://localhost:8000/docs
 ```
 
 ## Related Resources
