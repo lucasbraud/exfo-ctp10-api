@@ -185,16 +185,16 @@ def main():
             "wavelengths": data['wavelengths'],
             "values": data['values']
         }
-        print(f"  Downloaded {trace_name}: {len(data)} points")
+        print(f"  Downloaded {trace_name}: {len(data['wavelengths'])} points")
 
-    # Get wavelengths from first trace (same for all)
-    wavelengths = traces["TF live"]["wavelengths"]
-    print(f"\n  Wavelength range: {wavelengths[0]:.4f} - {wavelengths[-1]:.4f} nm")
-
-    # Print power statistics for each trace
+    # Print wavelength range and power statistics for each trace
+    print()
     for trace_name, trace_data in traces.items():
+        wavelengths = trace_data["wavelengths"]
         values = trace_data["values"]
-        print(f"  {trace_name} power range: {values.min():.2f} to {values.max():.2f} dB")
+        print(f"  {trace_name}:")
+        print(f"    Wavelength range: {wavelengths[0]:.4f} - {wavelengths[-1]:.4f} nm")
+        print(f"    Power range: {values.min():.2f} to {values.max():.2f} dB")
 
     # 9. Optional: Create reference trace
     # print("\nCreating reference trace...")
@@ -213,7 +213,7 @@ def main():
     plt.figure(figsize=(14, 7))
 
     plt.plot(
-        wavelengths,
+        traces["Raw live"]["wavelengths"],
         traces["Raw live"]["values"],
         label='Raw Live',
         linewidth=0.8,
@@ -221,14 +221,14 @@ def main():
         color='blue'
     )
     plt.plot(
-        wavelengths,
+        traces["TF live"]["wavelengths"],
         traces["TF live"]["values"],
         label='TF Live',
         linewidth=1.2,
         color='green'
     )
     plt.plot(
-        wavelengths,
+        traces["Raw reference"]["wavelengths"],
         traces["Raw reference"]["values"],
         label='Raw Reference',
         linewidth=1,

@@ -17,14 +17,24 @@ Complete guide for using the EXFO CTP10 API in both production and mock modes.
 
 ### Production Mode (Real Hardware)
 ```bash
+# Linux/Mac
 source .venv/bin/activate
+fastapi dev app/main.py
+
+# Windows PowerShell
+.venv\Scripts\Activate.ps1
 fastapi dev app/main.py
 ```
 
 ### Mock Mode (No Hardware Required)
 ```bash
+# Linux/Mac
 source .venv/bin/activate
 MOCK_MODE=true fastapi dev app/main.py
+
+# Windows PowerShell
+.venv\Scripts\Activate.ps1
+$env:MOCK_MODE="true"; fastapi dev app/main.py
 ```
 
 ---
@@ -50,12 +60,19 @@ MOCK_MODE=true fastapi dev app/main.py
 ### Using Environment Variables
 
 ```bash
-# Set mock mode
+# Linux/Mac - Set mock mode
 export MOCK_MODE=true
 fastapi dev app/main.py
 
-# Or inline
+# Linux/Mac - Or inline
 MOCK_MODE=true fastapi dev app/main.py
+
+# Windows PowerShell - Set mock mode
+$env:MOCK_MODE="true"
+fastapi dev app/main.py
+
+# Windows PowerShell - Or inline
+$env:MOCK_MODE="true"; fastapi dev app/main.py
 ```
 
 ### Using .env File (Recommended)
@@ -97,6 +114,7 @@ fastapi dev app/main.py
 
 ## Common Commands
 
+### Linux/Mac
 ```bash
 # Activate environment
 source .venv/bin/activate
@@ -118,6 +136,30 @@ uvicorn app.main:app --reload --host 0.0.0.0 --port 8002
 
 # Mock with uvicorn
 MOCK_MODE=true uvicorn app.main:app --reload
+```
+
+### Windows PowerShell
+```powershell
+# Activate environment
+.venv\Scripts\Activate.ps1
+
+# Production mode (real hardware)
+fastapi dev app/main.py
+
+# Mock mode (no hardware)
+$env:MOCK_MODE="true"; fastapi dev app/main.py
+
+# Production deployment
+fastapi run app/main.py --host 0.0.0.0 --port 8002
+
+# Mock deployment
+$env:MOCK_MODE="true"; fastapi run app/main.py --host 0.0.0.0 --port 8002
+
+# With custom uvicorn options
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8002
+
+# Mock with uvicorn
+$env:MOCK_MODE="true"; uvicorn app.main:app --reload
 ```
 
 ---
@@ -235,27 +277,44 @@ ws.onmessage = (event) => {
 ### Example 1: Development from Home
 
 ```bash
-# Set mock mode in .env
+# Linux/Mac - Set mock mode in .env
 echo "MOCK_MODE=true" >> .env
+
+# Windows PowerShell - Set mock mode in .env
+Add-Content .env "MOCK_MODE=true"
 
 # Start server
 fastapi dev app/main.py
 
-# Test with curl
+# Test with curl (Linux/Mac)
 curl http://localhost:8002/detector/snapshot
 
-# Or open browser
+# Test with curl (Windows PowerShell)
+curl.exe http://localhost:8002/detector/snapshot
+# Or use Invoke-RestMethod
+Invoke-RestMethod http://localhost:8002/detector/snapshot
+
+# Open browser (Linux/Mac)
 open http://localhost:8002/docs
+
+# Open browser (Windows)
+start http://localhost:8002/docs
 ```
 
 ### Example 2: Production in Lab
 
 ```bash
-# Ensure mock mode is disabled
+# Linux/Mac - Ensure mock mode is disabled
 sed -i '' '/MOCK_MODE/d' .env
 
-# Or explicitly set to false
+# Linux/Mac - Or explicitly set to false
 echo "MOCK_MODE=false" >> .env
+
+# Windows PowerShell - Remove mock mode from .env
+(Get-Content .env) | Where-Object { $_ -notmatch 'MOCK_MODE' } | Set-Content .env
+
+# Windows PowerShell - Or explicitly set to false
+Add-Content .env "MOCK_MODE=false"
 
 # Start server
 fastapi dev app/main.py
@@ -266,8 +325,11 @@ fastapi dev app/main.py
 ### Example 3: Quick Mode Switch
 
 ```bash
-# Work in mock mode
+# Linux/Mac - Work in mock mode
 MOCK_MODE=true fastapi dev app/main.py
+
+# Windows PowerShell - Work in mock mode
+$env:MOCK_MODE="true"; fastapi dev app/main.py
 
 # Switch to production (in another terminal)
 fastapi dev app/main.py
@@ -276,8 +338,11 @@ fastapi dev app/main.py
 ### Example 4: Frontend Development
 
 ```bash
-# Terminal 1: Start mock API
+# Terminal 1 (Linux/Mac): Start mock API
 MOCK_MODE=true fastapi dev app/main.py
+
+# Terminal 1 (Windows PowerShell): Start mock API
+$env:MOCK_MODE="true"; fastapi dev app/main.py
 
 # Terminal 2: Start your frontend
 cd frontend
@@ -300,8 +365,12 @@ ping 192.168.1.37
 
 **Disable auto-connect:**
 ```bash
+# Linux/Mac
 export AUTO_CONNECT=false
 fastapi dev app/main.py
+
+# Windows PowerShell
+$env:AUTO_CONNECT="false"; fastapi dev app/main.py
 ```
 
 **Verify settings:**
@@ -314,8 +383,13 @@ fastapi dev app/main.py
 
 **Verify MOCK_MODE is set:**
 ```bash
-# Check environment
+# Linux/Mac - Check environment
 env | grep MOCK_MODE
+
+# Windows PowerShell - Check environment
+Get-ChildItem Env:MOCK_MODE
+# Or
+$env:MOCK_MODE
 
 # Should show: MOCK_MODE=true
 ```
@@ -335,8 +409,12 @@ Then MOCK_MODE is not set correctly.
 ### Port Already in Use
 
 ```bash
-# Find process using port 8002
+# Linux/Mac - Find process using port 8002
 lsof -i :8002
+
+# Windows PowerShell - Find process using port 8002
+Get-NetTCPConnection -LocalPort 8002 | Select-Object OwningProcess
+Get-Process -Id <OwningProcess>
 
 # Kill it or use different port
 fastapi dev app/main.py --port 8003
@@ -364,7 +442,13 @@ wscat -c ws://localhost:8002/ws/power?module=4&interval=0.5
 
 1. **Development (Home):**
    ```bash
+   # Linux/Mac
    echo "MOCK_MODE=true" >> .env
+   
+   # Windows PowerShell
+   Add-Content .env "MOCK_MODE=true"
+   
+   # Start server
    fastapi dev app/main.py
    ```
 
@@ -375,13 +459,23 @@ wscat -c ws://localhost:8002/ws/power?module=4&interval=0.5
 
 3. **Lab Testing (Real Hardware):**
    ```bash
+   # Linux/Mac
    sed -i '' '/MOCK_MODE/d' .env
+   
+   # Windows PowerShell
+   (Get-Content .env) | Where-Object { $_ -notmatch 'MOCK_MODE' } | Set-Content .env
+   
+   # Start server
    fastapi dev app/main.py
    ```
 
 4. **Production Deployment:**
    ```bash
+   # Linux/Mac
    MOCK_MODE=false fastapi run app/main.py --host 0.0.0.0
+   
+   # Windows PowerShell
+   $env:MOCK_MODE="false"; fastapi run app/main.py --host 0.0.0.0
    ```
 
 ### Configuration Management
