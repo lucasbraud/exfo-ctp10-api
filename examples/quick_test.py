@@ -138,7 +138,7 @@ def test_tls():
         print(f"  Stop wavelength: {data['stop_wavelength_nm']:.2f} nm")
         print(f"  Sweep speed: {data['sweep_speed_nmps']} nm/s")
         print(f"  Laser power: {data['laser_power_dbm']:.2f} dBm")
-        print(f"  Trigger: {data['trigin']}")
+        print(f"  Trigin: {data['trigin']}")
 
         # Get individual parameters
         response = requests.get(f"{API_BASE}/tls/{TLS_CHANNEL}/power")
@@ -199,12 +199,17 @@ def test_measurement():
     print("=" * 60)
 
     try:
-        # Get sweep configuration
+        # Get resolution (separate endpoint)
+        response = requests.get(f"{API_BASE}/measurement/resolution")
+        response.raise_for_status()
+        resolution_data = response.json()
+        print(f"✓ Resolution: {resolution_data['resolution_pm']:.2f} pm")
+
+        # Get sweep configuration (stabilization only)
         response = requests.get(f"{API_BASE}/measurement/config")
         response.raise_for_status()
         data = response.json()
         print(f"✓ Sweep configuration:")
-        print(f"  Resolution: {data['resolution_pm']:.2f} pm")
         print(f"  Stabilization output: {data['stabilization_output']}")
         print(f"  Stabilization duration: {data['stabilization_duration']} s")
 
@@ -243,8 +248,6 @@ def test_trace_metadata():
         data = response.json()
         print(f"✓ Trace metadata (Module {MODULE}, Channel {CHANNEL}, Type 1):")
         print(f"  Number of points: {data['num_points']}")
-        print(f"  Sampling: {data['sampling_pm']:.2f} pm")
-        print(f"  Start wavelength: {data['start_wavelength_nm']:.4f} nm")
         print(f"  Unit: {data['unit']}")
 
         return True
