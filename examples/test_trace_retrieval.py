@@ -26,7 +26,7 @@ import matplotlib.pyplot as plt
 import io
 
 # API Configuration
-API_BASE = "http://localhost:8000"
+API_BASE = "http://localhost:8015"
 MODULE = 4  # Module number (SENSe[1-20])
 CHANNEL = 1  # Detector channel (CHANnel[1-6])
 
@@ -41,14 +41,14 @@ def main():
     print(f"Connected: {response.json()['instrument_id']}\n")
 
     # 2. Configure TLS1 parameters
-    print("Configuring TLS1...")
+    print("Configuring TLS1 for O-band...")
+    # Setting identifier=2 automatically configures O-band parameters:
+    # - Wavelength range: 1262.5-1355.0 nm
+    # - Sweep speed: 20 nm/s
+    # - Laser power: 10.0 dBm
+    # - Trigin: 2
     tls_config = {
-        "start_wavelength_nm": 1262.5,
-        "stop_wavelength_nm": 1355.0,
-        "sweep_speed_nmps": 20,
-            "laser_power_dbm": 10.0,
-            "trigin": 2,
-            "identifier": 2  # O-band laser
+        "identifier": 2  # O-band laser (auto-configures all parameters)
     }
     response = requests.post(f"{API_BASE}/tls/1/config", json=tls_config)
     response.raise_for_status()
@@ -110,12 +110,13 @@ def main():
     response = requests.get(f"{API_BASE}/tls/1/config")
     response.raise_for_status()
     tls_config = response.json()
+    laser_type = 'C-band' if tls_config['identifier'] == 1 else 'O-band' if tls_config['identifier'] == 2 else 'Unknown'
+    print(f"  TLS1 Identifier: {tls_config['identifier']} ({laser_type})")
     print(f"  TLS1 Start: {tls_config['start_wavelength_nm']:.2f} nm")
     print(f"  TLS1 Stop: {tls_config['stop_wavelength_nm']:.2f} nm")
     print(f"  TLS1 Speed: {tls_config['sweep_speed_nmps']} nm/s")
     print(f"  TLS1 Power: {tls_config['laser_power_dbm']:.2f} dBm")
     print(f"  TLS1 Trigger Input: {tls_config['trigin']}")
-    print(f"  TLS1 Identifier: {tls_config['identifier']} ({'C-band' if tls_config['identifier'] == 1 else 'O-band'})")
 
     # 6. Initiate sweep and wait for completion
     print("\nInitiating sweep...")

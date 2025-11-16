@@ -65,39 +65,99 @@ class FakeDetector:
 
     def sampling_pm(self, trace_type: int = 1) -> float:
         """Get sampling resolution in picometers."""
-        return 10.0
+        return 0.1  # 0.1 pm resolution
 
     def start_wavelength_nm(self, trace_type: int = 1) -> float:
         """Get trace start wavelength."""
-        # Use TLS1 start wavelength if available
+        # Use TLS1 start wavelength if available (O-band by default)
         if self.ctp10 and hasattr(self.ctp10, 'tls1'):
             return self.ctp10.tls1.start_wavelength_nm
-        return 1460.0
+        return 1262.5  # Default to O-band start
 
     def get_data_x(self, trace_type: int = 1, unit: str = 'M', format: str = 'BIN') -> np.ndarray:
         """Get wavelength data."""
         # Generate mock wavelength array using TLS configuration
         num_points = self.length(trace_type)
         
-        # Get start/stop from TLS1 if available
+        # Get start/stop from TLS1 if available (O-band by default)
         if self.ctp10 and hasattr(self.ctp10, 'tls1'):
             start_nm = self.ctp10.tls1.start_wavelength_nm
             stop_nm = self.ctp10.tls1.stop_wavelength_nm
         else:
-            start_nm = 1460.0
-            stop_nm = 1640.0
+            start_nm = 1262.5  # Default to O-band
+            stop_nm = 1355.0
         
         start_m = start_nm * 1e-9  # Convert to meters
         stop_m = stop_nm * 1e-9
         return np.linspace(start_m, stop_m, num_points)
 
     def get_data_y(self, trace_type: int = 1, unit: str = 'DB', format: str = 'BIN') -> np.ndarray:
-        """Get power/transmission data."""
-        # Generate mock power array with some noise
+        """Get power/transmission data with microring resonator features.
+        
+        Trace types:
+        - trace_type=1: TF live (Transmission Function, normalized to reference)
+        - trace_type=11: Raw live (actual transmitted power)
+        - trace_type=12: Raw reference (flat at -6 dBm)
+        """
         num_points = self.length(trace_type)
-        base_power = -20.0
-        noise = np.random.randn(num_points) * 0.5
-        return np.full(num_points, base_power) + noise
+        
+        # Get wavelength array to calculate resonances
+        wavelength_m = self.get_data_x(trace_type, unit='M', format='BIN')
+        wavelength_nm = wavelength_m * 1e9
+        
+        # Raw reference trace: flat at -6 dBm with minimal noise
+        if trace_type == 12:
+            reference_db = np.full(num_points, -6.0)
+            noise = np.random.randn(num_points) * 0.02  # Very small noise (20 mdB RMS)
+            return reference_db + noise
+        
+        # Raw live trace: reference level with device transmission loss and resonances
+        # Baseline transmission (slightly sloped, ~10 dB insertion loss from reference)
+        baseline_db = -16.0 + (wavelength_nm - wavelength_nm[0]) * 0.001
+        
+        # Add multiple resonance dips (typical microring behavior)
+        # Free Spectral Range (FSR) varies between 0.5-2.0 nm depending on ring size
+        fsr_nm = 1.2  # FSR for a typical microring (~100 µm radius)
+        
+        # Determine wavelength range
+        wl_start = wavelength_nm[0]
+        wl_stop = wavelength_nm[-1]
+        wl_range = wl_stop - wl_start
+        
+        # Calculate number of resonances in this range
+        num_resonances = int(wl_range / fsr_nm) + 1
+        
+        # Generate resonances
+        transmission_db = baseline_db.copy()
+        for i in range(num_resonances):
+            # Resonance wavelength
+            resonance_wl = wl_start + (i + 0.3) * fsr_nm  # offset by 0.3 for variety
+            
+            # Lorentzian dip parameters
+            extinction_ratio = 15 + np.random.rand() * 5  # 15-20 dB extinction
+            linewidth_nm = 0.05 + np.random.rand() * 0.05  # 50-100 pm linewidth (Q ~ 15000-30000)
+            
+            # Lorentzian profile: L(λ) = -ER / (1 + 4((λ-λ0)/Δλ)²)
+            detuning = (wavelength_nm - resonance_wl) / linewidth_nm
+            lorentzian = -extinction_ratio / (1 + 4 * detuning**2)
+            
+            transmission_db += lorentzian
+        
+        # Add realistic noise (measurement noise)
+        noise = np.random.randn(num_points) * 0.05  # 50 mdB RMS noise
+        raw_live_db = transmission_db + noise
+        
+        # TF live trace: normalized transmission (raw_live - reference)
+        # This removes the absolute power level and shows only device response
+        if trace_type == 1:
+            # TF = Raw Live - Raw Reference (in dB)
+            # Since raw_live is ~-16 dBm and reference is -6 dBm, TF will be around -10 dB
+            # TF shows transmission loss relative to reference (sits below reference visually)
+            tf_db = raw_live_db - (-6.0)  # This gives ~-10 dB baseline with resonances deeper
+            return tf_db
+        
+        # Raw live trace (trace_type == 11 or default)
+        return raw_live_db
 
 
 class FakeTLS:
@@ -105,12 +165,34 @@ class FakeTLS:
 
     def __init__(self, channel: int):
         self.channel = channel
-        self._start_wavelength_nm = 1500.0
-        self._stop_wavelength_nm = 1600.0
-        self._sweep_speed_nmps = 50
-        self._laser_power_dbm = 5.0
-        self._trigin = 0
-        self._identifier = 1  # Default to C-band
+        # Default to O-band laser (identifier 2) for TLS1
+        # Settings change when identifier is set to different laser
+        self._identifier = 2  # Default to O-band laser
+        self._update_settings_for_laser()
+
+    def _update_settings_for_laser(self):
+        """Update TLS settings based on selected laser identifier."""
+        if self._identifier == 1:
+            # C-band laser configuration
+            self._start_wavelength_nm = 1502.0
+            self._stop_wavelength_nm = 1627.0
+            self._trigin = 1
+            self._sweep_speed_nmps = 20
+            self._laser_power_dbm = 8.0
+        elif self._identifier == 2:
+            # O-band laser configuration
+            self._start_wavelength_nm = 1262.5
+            self._stop_wavelength_nm = 1355.0
+            self._trigin = 2
+            self._sweep_speed_nmps = 20
+            self._laser_power_dbm = 10.0
+        else:
+            # Default/unassigned
+            self._start_wavelength_nm = 1500.0
+            self._stop_wavelength_nm = 1600.0
+            self._trigin = 0
+            self._sweep_speed_nmps = 20
+            self._laser_power_dbm = 5.0
 
     @property
     def start_wavelength_nm(self) -> float:
@@ -159,6 +241,8 @@ class FakeTLS:
     @identifier.setter
     def identifier(self, value: int):
         self._identifier = value
+        # Update all TLS settings when laser selection changes
+        self._update_settings_for_laser()
 
 
 class FakeRLaser:
@@ -166,9 +250,24 @@ class FakeRLaser:
 
     def __init__(self, laser_number: int):
         self.laser_number = laser_number
-        self._idn = ["EXFO", "T100S-HP", "0", "6.06"]
-        self._wavelength_nm = 1550.0
-        self._power_dbm = 5.0
+        
+        # Laser 1 = C-band (T100S-HP), Laser 2 = O-band (T200S-O-M)
+        if laser_number == 1:
+            # C-band laser
+            self._idn = ["EXFO", "T100S-HP", 0.0, 6.07]
+            self._wavelength_nm = 1550.0
+            self._power_dbm = 8.0
+        elif laser_number == 2:
+            # O-band laser
+            self._idn = ["EXFO", "T200S-O-M", "EO241510155", "4.6.3.0"]
+            self._wavelength_nm = 1355.0
+            self._power_dbm = 10.0
+        else:
+            # Other lasers (not present)
+            self._idn = ["EXFO", "Unknown", "0", "0.0.0"]
+            self._wavelength_nm = 1550.0
+            self._power_dbm = 5.0
+        
         self._power_state_enabled = False
 
     @property
@@ -225,8 +324,8 @@ class FakeCTP10:
         self.address = address
         self._id = "EXFO,CTP10,12345678,1.2.3"
         self._condition_register = 0  # 0 = idle
-        self._resolution_pm = 10.0
-        self._stabilization = (0, 0.0)  # (output, duration)
+        self._resolution_pm = 0.1  # 0.1 pm resolution
+        self._stabilization = (True, 0.0)  # (output_state=True, duration=0.0)
         self._sweep_in_progress = False
         self._sweep_start_time = None
 

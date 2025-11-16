@@ -160,6 +160,12 @@ The API follows a hardware-centric structure matching the CTP10 architecture:
 - `/measurement/sweep/status` - Get sweep status
 
 ### TLS (Channels 1-4)
+
+**Note**: Setting the `identifier` property automatically configures all TLS parameters for the selected laser:
+- **identifier=1** (C-band): Configures wavelength range (1502-1627nm), power (8dBm), sweep speed (20nm/s), trigin (1)
+- **identifier=2** (O-band): Configures wavelength range (1262.5-1355nm), power (10dBm), sweep speed (20nm/s), trigin (2)
+
+**Endpoints**:
 - `/tls/{channel}/config` - Get/set complete TLS configuration
 - `/tls/{channel}/wavelength` - Get/set wavelength range
 - `/tls/{channel}/power` - Get/set laser power

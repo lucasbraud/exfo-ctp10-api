@@ -12,7 +12,7 @@ import requests
 import sys
 
 # API Configuration
-API_BASE = "http://localhost:8000"
+API_BASE = "http://localhost:8015"
 
 # Test configuration
 MODULE = 4
@@ -177,14 +177,6 @@ def test_rlaser():
             response.raise_for_status()
             data = response.json()
             print(f"  State: {'ON' if data['is_on'] else 'OFF'}")
-
-        # Get RLaser configuration for primary laser (laser 2)
-        response = requests.get(f"{API_BASE}/rlaser/{RLASER_NUMBER}/config")
-        response.raise_for_status()
-        data = response.json()
-        print(f"\n✓ RLaser{RLASER_NUMBER} configuration:")
-        print(f"  Wavelength: {data['wavelength_nm']:.2f} nm")
-        print(f"  Power: {data['power_dbm']:.2f} dBm")
 
         return True
     except Exception as e:
