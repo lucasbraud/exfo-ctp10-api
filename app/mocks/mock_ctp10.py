@@ -240,9 +240,12 @@ class FakeTLS:
 
     @identifier.setter
     def identifier(self, value: int):
+        """Set laser identifier without resetting other parameters.
+        
+        The identifier just indicates which reference laser the TLS is using,
+        but the TLS parameters (wavelength, power, etc.) should remain as configured.
+        """
         self._identifier = value
-        # Update all TLS settings when laser selection changes
-        self._update_settings_for_laser()
 
 
 class FakeRLaser:
