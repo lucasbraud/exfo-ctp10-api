@@ -83,7 +83,9 @@ async def get_connection_status(
     instrument_id = None
     if ctp is not None:
         try:
-            instrument_id = ctp.id
+            lock = manager.scpi_lock
+            async with lock:
+                instrument_id = await asyncio.to_thread(lambda: ctp.id)
         except Exception:
             pass
 
@@ -95,7 +97,10 @@ async def get_connection_status(
 
 
 @router.get("/condition", response_model=ConditionRegister)
-async def get_condition_register(ctp: Annotated[CTP10, Depends(get_ctp10)]):
+async def get_condition_register(
+    ctp: Annotated[CTP10, Depends(get_ctp10)],
+    manager: Annotated[CTP10Manager, Depends(get_ctp10_manager)]
+):
     """
     Get the Operational Status Condition Register value.
 
@@ -112,7 +117,10 @@ async def get_condition_register(ctp: Annotated[CTP10, Depends(get_ctp10)]):
     Zero value indicates idle state.
     """
     try:
-        condition = ctp.condition_register
+        lock = manager.scpi_lock
+
+        async with lock:
+            condition = await asyncio.to_thread(lambda: ctp.condition_register)
 
         # Decode common bits
         bits = {
@@ -139,7 +147,10 @@ async def get_condition_register(ctp: Annotated[CTP10, Depends(get_ctp10)]):
 
 
 @router.post("/check_errors")
-async def check_errors(ctp: Annotated[CTP10, Depends(get_ctp10)]):
+async def check_errors(
+    ctp: Annotated[CTP10, Depends(get_ctp10)],
+    manager: Annotated[CTP10Manager, Depends(get_ctp10_manager)]
+):
     """
     Check for errors in the instrument error queue.
 
@@ -147,7 +158,11 @@ async def check_errors(ctp: Annotated[CTP10, Depends(get_ctp10)]):
     Raises an exception if errors are found.
     """
     try:
-        ctp.check_errors()
+        lock = manager.scpi_lock
+
+        async with lock:
+            await asyncio.to_thread(ctp.check_errors)
+
         return {"success": True, "message": "No errors found"}
     except Exception as e:
         raise HTTPException(

@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.factory import create_ctp10_manager
-from app.routers import connection, detector, measurement, tls, rlaser, websocket, websocket_v2
+from app.routers import connection, detector, measurement, tls, rlaser, websocket
 
 # Configure logging
 logging.basicConfig(
@@ -106,4 +106,3 @@ app.include_router(measurement.router)
 app.include_router(tls.router)
 app.include_router(rlaser.router)
 app.include_router(websocket.router)
-app.include_router(websocket_v2.router)

@@ -113,41 +113,46 @@ async def get_detector_snapshot(
 @router.get("/config")
 async def get_detector_config(
     ctp: Annotated[CTP10, Depends(get_ctp10)],
+    manager: Annotated[CTP10Manager, Depends(get_ctp10_manager)],
     module: int = Query(default=settings.DEFAULT_MODULE, ge=1, le=20),
     channel: int = Query(default=settings.DEFAULT_CHANNEL, ge=1, le=6),
 ):
     """Get detector configuration (units, resolution)."""
     try:
         logger.debug(f"Getting detector config for module={module}, channel={channel}")
-        detector = ctp.detector(module=module, channel=channel)
-        logger.debug(f"Detector object created: {detector}")
+        lock = manager.scpi_lock
 
-        # Try to get each property, use None if not available
-        config = {
-            "module": module,
-            "channel": channel,
-        }
+        # All SCPI I/O must be in asyncio.to_thread() and inside lock
+        async with lock:
+            detector = await asyncio.to_thread(ctp.detector, module=module, channel=channel)
+            logger.debug(f"Detector object created: {detector}")
 
-        try:
-            config["power_unit"] = detector.power_unit
-            logger.debug(f"Got power_unit: {config['power_unit']}")
-        except Exception as e:
-            logger.warning(f"Failed to get power_unit: {e}")
-            config["power_unit"] = None
+            # Try to get each property, use None if not available
+            config = {
+                "module": module,
+                "channel": channel,
+            }
 
-        try:
-            config["spectral_unit"] = detector.spectral_unit
-            logger.debug(f"Got spectral_unit: {config['spectral_unit']}")
-        except Exception as e:
-            logger.warning(f"Failed to get spectral_unit: {e}")
-            config["spectral_unit"] = None
+            try:
+                config["power_unit"] = await asyncio.to_thread(lambda: detector.power_unit)
+                logger.debug(f"Got power_unit: {config['power_unit']}")
+            except Exception as e:
+                logger.warning(f"Failed to get power_unit: {e}")
+                config["power_unit"] = None
 
-        try:
-            config["resolution_pm"] = ctp.resolution_pm
-            logger.debug(f"Got resolution_pm: {config['resolution_pm']}")
-        except Exception as e:
-            logger.warning(f"Failed to get resolution_pm: {e}")
-            config["resolution_pm"] = None
+            try:
+                config["spectral_unit"] = await asyncio.to_thread(lambda: detector.spectral_unit)
+                logger.debug(f"Got spectral_unit: {config['spectral_unit']}")
+            except Exception as e:
+                logger.warning(f"Failed to get spectral_unit: {e}")
+                config["spectral_unit"] = None
+
+            try:
+                config["resolution_pm"] = await asyncio.to_thread(lambda: ctp.resolution_pm)
+                logger.debug(f"Got resolution_pm: {config['resolution_pm']}")
+            except Exception as e:
+                logger.warning(f"Failed to get resolution_pm: {e}")
+                config["resolution_pm"] = None
 
         return config
     except Exception as e:
@@ -159,22 +164,26 @@ async def get_detector_config(
 async def set_detector_config(
     config: DetectorConfig,
     ctp: Annotated[CTP10, Depends(get_ctp10)],
+    manager: Annotated[CTP10Manager, Depends(get_ctp10_manager)],
     module: int = Query(default=settings.DEFAULT_MODULE, ge=1, le=20),
     channel: int = Query(default=settings.DEFAULT_CHANNEL, ge=1, le=6),
 ):
     """Set detector configuration (units, resolution)."""
     try:
-        detector = ctp.detector(module=module, channel=channel)
+        lock = manager.scpi_lock
 
-        if config.power_unit is not None:
-            detector.power_unit = config.power_unit
+        async with lock:
+            detector = await asyncio.to_thread(ctp.detector, module=module, channel=channel)
 
-        if config.spectral_unit is not None:
-            detector.spectral_unit = config.spectral_unit
+            if config.power_unit is not None:
+                await asyncio.to_thread(setattr, detector, 'power_unit', config.power_unit)
 
-        if config.resolution_pm is not None:
-            # Resolution is a global setting on the CTP10
-            ctp.resolution_pm = config.resolution_pm
+            if config.spectral_unit is not None:
+                await asyncio.to_thread(setattr, detector, 'spectral_unit', config.spectral_unit)
+
+            if config.resolution_pm is not None:
+                # Resolution is a global setting on the CTP10
+                await asyncio.to_thread(setattr, ctp, 'resolution_pm', config.resolution_pm)
 
         return {
             "success": True,
@@ -190,10 +199,17 @@ async def set_detector_config(
 
 
 @router.get("/stabilization")
-async def get_stabilization(ctp: Annotated[CTP10, Depends(get_ctp10)]):
+async def get_stabilization(
+    ctp: Annotated[CTP10, Depends(get_ctp10)],
+    manager: Annotated[CTP10Manager, Depends(get_ctp10_manager)]
+):
     """Get laser stabilization settings (output state, duration)."""
     try:
-        output, duration = ctp.stabilization
+        lock = manager.scpi_lock
+
+        async with lock:
+            output, duration = await asyncio.to_thread(lambda: ctp.stabilization)
+
         # Convert integer to boolean (0=False, 1=True)
         output_bool = bool(output)
         return {
@@ -207,16 +223,22 @@ async def get_stabilization(ctp: Annotated[CTP10, Depends(get_ctp10)]):
 @router.post("/stabilization")
 async def set_stabilization(
     config: StabilizationConfig,
-    ctp: Annotated[CTP10, Depends(get_ctp10)]
+    ctp: Annotated[CTP10, Depends(get_ctp10)],
+    manager: Annotated[CTP10Manager, Depends(get_ctp10_manager)]
 ):
     """Set laser stabilization settings."""
     if not (0 <= config.duration_seconds <= 60):
         raise HTTPException(status_code=400, detail="Duration must be 0-60 seconds")
 
     try:
+        lock = manager.scpi_lock
+
         # Convert boolean to integer (0 or 1) for the device
         output_int = 1 if config.output else 0
-        ctp.stabilization = (output_int, config.duration_seconds)
+
+        async with lock:
+            await asyncio.to_thread(setattr, ctp, 'stabilization', (output_int, config.duration_seconds))
+
         return {
             "success": True,
             "output": config.output,
@@ -229,13 +251,17 @@ async def set_stabilization(
 @router.post("/reference")
 async def create_reference(
     ctp: Annotated[CTP10, Depends(get_ctp10)],
+    manager: Annotated[CTP10Manager, Depends(get_ctp10_manager)],
     module: int = Query(default=settings.DEFAULT_MODULE, ge=1, le=20),
     channel: int = Query(default=settings.DEFAULT_CHANNEL, ge=1, le=6),
 ):
     """Create reference trace for detector channel."""
     try:
-        detector = ctp.detector(module=module, channel=channel)
-        detector.create_reference()
+        lock = manager.scpi_lock
+
+        async with lock:
+            detector = await asyncio.to_thread(ctp.detector, module=module, channel=channel)
+            await asyncio.to_thread(detector.create_reference)
 
         return {
             "success": True,
@@ -248,6 +274,7 @@ async def create_reference(
 @router.get("/trace/metadata", response_model=TraceMetadata)
 async def get_trace_metadata(
     ctp: Annotated[CTP10, Depends(get_ctp10)],
+    manager: Annotated[CTP10Manager, Depends(get_ctp10_manager)],
     module: int = Query(default=settings.DEFAULT_MODULE, ge=1, le=20),
     channel: int = Query(default=settings.DEFAULT_CHANNEL, ge=1, le=6),
     trace_type: int = Query(default=1, ge=1, le=23, description="1=TF live, 11=Raw live, 12=Raw ref, 13=Quick ref"),
@@ -258,9 +285,12 @@ async def get_trace_metadata(
     Use this to check trace information before downloading large datasets.
     """
     try:
-        detector = ctp.detector(module=module, channel=channel)
-        num_points = detector.length(trace_type=trace_type)
-        unit = detector.power_unit
+        lock = manager.scpi_lock
+
+        async with lock:
+            detector = await asyncio.to_thread(ctp.detector, module=module, channel=channel)
+            num_points = await asyncio.to_thread(detector.length, trace_type=trace_type)
+            unit = await asyncio.to_thread(lambda: detector.power_unit)
 
         return TraceMetadata(
             module=module,
@@ -276,6 +306,7 @@ async def get_trace_metadata(
 @router.get("/trace/data", response_model=TraceDataResponse)
 async def get_trace_data_json(
     ctp: Annotated[CTP10, Depends(get_ctp10)],
+    manager: Annotated[CTP10Manager, Depends(get_ctp10_manager)],
     module: int = Query(default=settings.DEFAULT_MODULE, ge=1, le=20),
     channel: int = Query(default=settings.DEFAULT_CHANNEL, ge=1, le=6),
     trace_type: int = Query(default=1, ge=1, le=23),
@@ -287,17 +318,25 @@ async def get_trace_data_json(
     Consider using /trace/binary for better performance.
     """
     try:
-        detector = ctp.detector(module=module, channel=channel)
+        lock = manager.scpi_lock
 
-        # Get metadata
-        num_points = detector.length(trace_type=trace_type)
-        unit = detector.power_unit
+        # All SCPI I/O inside lock
+        async with lock:
+            detector = await asyncio.to_thread(ctp.detector, module=module, channel=channel)
 
-        # Get trace data (binary format for speed, convert to lists for JSON)
-        wavelengths_m = detector.get_data_x(trace_type=trace_type, unit='M', format='BIN')
-        values = detector.get_data_y(trace_type=trace_type, unit='DB', format='BIN')
+            # Get metadata
+            num_points = await asyncio.to_thread(detector.length, trace_type=trace_type)
+            unit = await asyncio.to_thread(lambda: detector.power_unit)
 
-        # Convert meters to nanometers and numpy arrays to lists
+            # Get trace data (binary format for speed, convert to lists for JSON)
+            wavelengths_m = await asyncio.to_thread(
+                detector.get_data_x, trace_type=trace_type, unit='M', format='BIN'
+            )
+            values = await asyncio.to_thread(
+                detector.get_data_y, trace_type=trace_type, unit='DB', format='BIN'
+            )
+
+        # Data processing (outside lock - no SCPI I/O)
         wavelengths_nm = (wavelengths_m * 1e9).tolist()
         values_list = values.tolist()
 
@@ -321,6 +360,7 @@ async def get_trace_data_json(
 @router.get("/trace/binary")
 async def get_trace_data_binary(
     ctp: Annotated[CTP10, Depends(get_ctp10)],
+    manager: Annotated[CTP10Manager, Depends(get_ctp10_manager)],
     module: int = Query(default=settings.DEFAULT_MODULE, ge=1, le=20),
     channel: int = Query(default=settings.DEFAULT_CHANNEL, ge=1, le=6),
     trace_type: int = Query(default=1, ge=1, le=23),
@@ -342,18 +382,27 @@ async def get_trace_data_binary(
     ```
     """
     try:
-        detector = ctp.detector(module=module, channel=channel)
+        lock = manager.scpi_lock
 
-        # Get trace data in binary format
-        wavelengths_m = detector.get_data_x(trace_type=trace_type, unit='M', format='BIN')
-        values = detector.get_data_y(trace_type=trace_type, unit='DB', format='BIN')
+        # All SCPI I/O must be in asyncio.to_thread() and inside lock
+        async with lock:
+            detector = await asyncio.to_thread(ctp.detector, module=module, channel=channel)
 
+            # Get trace data in binary format
+            wavelengths_m = await asyncio.to_thread(
+                detector.get_data_x, trace_type=trace_type, unit='M', format='BIN'
+            )
+            values = await asyncio.to_thread(
+                detector.get_data_y, trace_type=trace_type, unit='DB', format='BIN'
+            )
+
+        # Data processing (outside lock - no SCPI I/O, CPU-bound work)
         # Convert meters to nanometers
         wavelengths_nm = wavelengths_m * 1e9
 
-        # Create structured array with both datasets
-        data = np.array(
-            list(zip(wavelengths_nm, values)),
+        # Create structured array - more efficient than list(zip(...))
+        data = np.core.records.fromarrays(
+            [wavelengths_nm, values],
             dtype=[('wavelengths', 'f8'), ('values', 'f8')]
         )
 

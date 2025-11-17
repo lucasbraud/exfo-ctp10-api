@@ -3,10 +3,10 @@
 ## ✅ Integration Complete!
 
 ### Backend Changes
-- ✅ Added `websocket_v2.py` router with gold standard features
+- ✅ Added `websocket.py` router with gold standard features
 - ✅ Registered in `main.py`
 - ✅ Module imports successfully
-- ✅ Routes registered: `/ws/v2/power` and `/ws/v2/health`
+- ✅ Routes registered: `/ws/power` and `/ws/health`
 
 ### Frontend Changes
 - ✅ Created `useWebSocketWithReconnect.ts` hook
@@ -32,7 +32,7 @@ MOCK_MODE=true fastapi dev app/main.py --port=8002
 
 ```bash
 # Test V2 power stream
-wscat -c "ws://localhost:8002/api/v1/ws/v2/power?module=4&interval=0.1"
+wscat -c "ws://localhost:8002/api/v1/ws/power?module=4&interval=0.1"
 
 # You should see:
 # Connected
@@ -51,7 +51,7 @@ import websockets
 import json
 
 async def test():
-    uri = 'ws://localhost:8002/api/v1/ws/v2/power?module=4&interval=0.1'
+    uri = 'ws://localhost:8002/api/v1/ws/power?module=4&interval=0.1'
     async with websockets.connect(uri) as ws:
         for i in range(10):
             msg = await ws.recv()
@@ -155,23 +155,23 @@ ls -la src/hooks/useWebSocketWithReconnect.ts
 # If missing, file was created in wrong location - move it
 ```
 
-### Backend: "ModuleNotFoundError: No module named 'app.routers.websocket_v2'"
+### Backend: "ModuleNotFoundError: No module named 'app.routers.websocket'"
 
 **Solution:**
 ```bash
 cd /Users/lucas/Documents/git/github/exfo-ctp10-api
 # Check if file exists
-ls -la app/routers/websocket_v2.py
+ls -la app/routers/websocket.py
 # Test import
 source .venv/bin/activate
-python -c "from app.routers import websocket_v2"
+python -c "from app.routers import websocket"
 ```
 
 ### WebSocket: "Failed to connect"
 
 **Solution:**
 1. Check backend is running on correct port (8002)
-2. Check URL in browser console: Should be `ws://localhost:8002/api/v1/ws/v2/power`
+2. Check URL in browser console: Should be `ws://localhost:8002/api/v1/ws/power`
 3. Verify CORS settings in backend
 4. Check firewall/antivirus blocking WebSocket
 
@@ -188,7 +188,7 @@ python -c "from app.routers import websocket_v2"
 ## 🚀 Next Steps (Optional)
 
 1. **Add WebSocket for Sweep Progress**
-   - Create `/ws/v2/sweep/progress` endpoint
+   - Create `/ws/sweep/progress` endpoint
    - Stream real-time sweep updates instead of polling
 
 2. **Add Connection Health Dashboard**

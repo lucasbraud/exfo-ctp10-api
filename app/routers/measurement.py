@@ -1,11 +1,13 @@
 """Sweep control for CTP10."""
 
+import asyncio
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pymeasure.instruments.exfo import CTP10
 
-from app.dependencies import get_ctp10
+from app.dependencies import get_ctp10, get_ctp10_manager
+from app.manager import CTP10Manager
 from app.models import SweepStatus
 
 router = APIRouter(prefix="/measurement", tags=["Measurement"])
@@ -19,6 +21,7 @@ router = APIRouter(prefix="/measurement", tags=["Measurement"])
 @router.post("/sweep/start")
 async def start_sweep(
     ctp: Annotated[CTP10, Depends(get_ctp10)],
+    manager: Annotated[CTP10Manager, Depends(get_ctp10_manager)],
     wait: bool = Query(default=False, description="Wait for sweep to complete before returning")
 ):
     """
@@ -28,11 +31,16 @@ async def start_sweep(
     Use GET /measurement/sweep/status to monitor progress, or set wait=true to block until complete.
     """
     try:
-        ctp.initiate_sweep()
+        lock = manager.scpi_lock
+
+        async with lock:
+            await asyncio.to_thread(ctp.initiate_sweep)
+
+            if wait:
+                # Wait for sweep to complete (can take 30-60 seconds)
+                await asyncio.to_thread(ctp.wait_for_sweep_complete)
 
         if wait:
-            # Wait for sweep to complete (blocking)
-            ctp.wait_for_sweep_complete()
             return {
                 "success": True,
                 "message": "Sweep completed",
@@ -49,21 +57,31 @@ async def start_sweep(
 
 
 @router.post("/sweep/abort")
-async def abort_sweep(ctp: Annotated[CTP10, Depends(get_ctp10)]):
+async def abort_sweep(
+    ctp: Annotated[CTP10, Depends(get_ctp10)],
+    manager: Annotated[CTP10Manager, Depends(get_ctp10_manager)]
+):
     """
     Abort the current sweep operation.
 
     Sends SCPI ABORt command to stop the scan.
     """
     try:
-        ctp.write(':ABORt')
+        lock = manager.scpi_lock
+
+        async with lock:
+            await asyncio.to_thread(ctp.write, ':ABORt')
+
         return {"success": True, "message": "Sweep aborted"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to abort sweep: {str(e)}")
 
 
 @router.get("/sweep/status", response_model=SweepStatus)
-async def get_sweep_status(ctp: Annotated[CTP10, Depends(get_ctp10)]):
+async def get_sweep_status(
+    ctp: Annotated[CTP10, Depends(get_ctp10)],
+    manager: Annotated[CTP10Manager, Depends(get_ctp10_manager)]
+):
     """
     Get sweep status.
 
@@ -71,8 +89,11 @@ async def get_sweep_status(ctp: Annotated[CTP10, Depends(get_ctp10)]):
     Condition register bit 2 (value 4) indicates scanning.
     """
     try:
-        is_complete = ctp.sweep_complete
-        condition = ctp.condition_register
+        lock = manager.scpi_lock
+
+        async with lock:
+            is_complete = await asyncio.to_thread(lambda: ctp.sweep_complete)
+            condition = await asyncio.to_thread(lambda: ctp.condition_register)
 
         # Condition register bit 2 (value 4) indicates scanning
         is_sweeping = bool(condition & 4)

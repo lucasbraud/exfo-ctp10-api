@@ -8,7 +8,7 @@ import requests
 import websockets
 
 API_BASE = "http://localhost:8002"
-WS_URL = "ws://localhost:8002/ws/v2/power?module=4&interval=0.1"
+WS_URL = "ws://localhost:8002/ws/power?module=4&interval=0.1"
 
 async def monitor_websocket():
     # First, ensure we're connected via REST API

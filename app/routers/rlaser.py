@@ -1,12 +1,14 @@
 """Reference Laser (RLaser) configuration endpoints for CTP10."""
 
+import asyncio
 import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Path
 from pymeasure.instruments.exfo import CTP10
 
-from app.dependencies import get_ctp10
+from app.dependencies import get_ctp10, get_ctp10_manager
+from app.manager import CTP10Manager
 from app.models import RLaserConfig, RLaserStatus
 
 router = APIRouter(prefix="/rlaser", tags=["RLaser"])
@@ -16,6 +18,7 @@ logger = logging.getLogger(__name__)
 @router.get("/{laser_number}/config", response_model=RLaserStatus)
 async def get_rlaser_config(
     ctp: Annotated[CTP10, Depends(get_ctp10)],
+    manager: Annotated[CTP10Manager, Depends(get_ctp10_manager)],
     laser_number: int = Path(ge=1, le=10, description="Reference laser number (1-10)")
 ):
     """
@@ -25,25 +28,27 @@ async def get_rlaser_config(
     """
     try:
         logger.debug(f"Getting RLaser{laser_number} config")
-        laser = ctp.rlaser[laser_number]
+        lock = manager.scpi_lock
 
-        laser_id = laser.idn
-        logger.debug(f"Got ID: {laser_id} (type: {type(laser_id)})")
+        async with lock:
+            laser = await asyncio.to_thread(lambda: ctp.rlaser[laser_number])
+            laser_id = await asyncio.to_thread(lambda: laser.idn)
+            logger.debug(f"Got ID: {laser_id} (type: {type(laser_id)})")
 
-        # Handle both string and list formats for ID
-        if isinstance(laser_id, list):
-            id_string = ','.join(str(p) for p in laser_id)
-        else:
-            id_string = str(laser_id)
+            # Handle both string and list formats for ID
+            if isinstance(laser_id, list):
+                id_string = ','.join(str(p) for p in laser_id)
+            else:
+                id_string = str(laser_id)
 
-        wavelength = laser.wavelength_nm
-        logger.debug(f"Got wavelength: {wavelength}")
+            wavelength = await asyncio.to_thread(lambda: laser.wavelength_nm)
+            logger.debug(f"Got wavelength: {wavelength}")
 
-        power = laser.power_dbm
-        logger.debug(f"Got power: {power}")
+            power = await asyncio.to_thread(lambda: laser.power_dbm)
+            logger.debug(f"Got power: {power}")
 
-        state = laser.power_state_enabled
-        logger.debug(f"Got state: {state}")
+            state = await asyncio.to_thread(lambda: laser.power_state_enabled)
+            logger.debug(f"Got state: {state}")
 
         return RLaserStatus(
             laser_number=laser_number,
@@ -64,6 +69,7 @@ async def get_rlaser_config(
 async def set_rlaser_config(
     config: RLaserConfig,
     ctp: Annotated[CTP10, Depends(get_ctp10)],
+    manager: Annotated[CTP10Manager, Depends(get_ctp10_manager)],
     laser_number: int = Path(ge=1, le=10)
 ):
     """
@@ -72,16 +78,19 @@ async def set_rlaser_config(
     Updates power, wavelength, and/or state. Only provided parameters will be updated.
     """
     try:
-        laser = ctp.rlaser[laser_number]
+        lock = manager.scpi_lock
 
-        if config.power_dbm is not None:
-            laser.power_dbm = config.power_dbm
+        async with lock:
+            laser = await asyncio.to_thread(lambda: ctp.rlaser[laser_number])
 
-        if config.wavelength_nm is not None:
-            laser.wavelength_nm = config.wavelength_nm
+            if config.power_dbm is not None:
+                await asyncio.to_thread(setattr, laser, 'power_dbm', config.power_dbm)
 
-        if config.power_state is not None:
-            laser.power_state_enabled = config.power_state
+            if config.wavelength_nm is not None:
+                await asyncio.to_thread(setattr, laser, 'wavelength_nm', config.wavelength_nm)
+
+            if config.power_state is not None:
+                await asyncio.to_thread(setattr, laser, 'power_state_enabled', config.power_state)
 
         return {
             "success": True,
@@ -98,6 +107,7 @@ async def set_rlaser_config(
 @router.get("/{laser_number}/id")
 async def get_rlaser_id(
     ctp: Annotated[CTP10, Depends(get_ctp10)],
+    manager: Annotated[CTP10Manager, Depends(get_ctp10_manager)],
     laser_number: int = Path(ge=1, le=10)
 ):
     """
@@ -107,7 +117,11 @@ async def get_rlaser_id(
     Example: "EXFO,T100S-HP,0,6.06" or ['EXFO', 'T200S-O-M', 'EO241510155', '4.6.3.0']
     """
     try:
-        laser_id = ctp.rlaser[laser_number].idn
+        lock = manager.scpi_lock
+
+        async with lock:
+            laser = await asyncio.to_thread(lambda: ctp.rlaser[laser_number])
+            laser_id = await asyncio.to_thread(lambda: laser.idn)
 
         # Handle both string and list formats
         if isinstance(laser_id, list):
@@ -136,11 +150,16 @@ async def get_rlaser_id(
 @router.get("/{laser_number}/power")
 async def get_rlaser_power(
     ctp: Annotated[CTP10, Depends(get_ctp10)],
+    manager: Annotated[CTP10Manager, Depends(get_ctp10_manager)],
     laser_number: int = Path(ge=1, le=10)
 ):
     """Get reference laser power setting in dBm."""
     try:
-        power_dbm = ctp.rlaser[laser_number].power_dbm
+        lock = manager.scpi_lock
+
+        async with lock:
+            laser = await asyncio.to_thread(lambda: ctp.rlaser[laser_number])
+            power_dbm = await asyncio.to_thread(lambda: laser.power_dbm)
 
         return {
             "laser_number": laser_number,
@@ -157,6 +176,7 @@ async def get_rlaser_power(
 async def set_rlaser_power(
     power_dbm: float,
     ctp: Annotated[CTP10, Depends(get_ctp10)],
+    manager: Annotated[CTP10Manager, Depends(get_ctp10_manager)],
     laser_number: int = Path(ge=1, le=10)
 ):
     """
@@ -165,7 +185,11 @@ async def set_rlaser_power(
     Power range depends on laser model (typically -10 to 13 dBm).
     """
     try:
-        ctp.rlaser[laser_number].power_dbm = power_dbm
+        lock = manager.scpi_lock
+
+        async with lock:
+            laser = await asyncio.to_thread(lambda: ctp.rlaser[laser_number])
+            await asyncio.to_thread(setattr, laser, 'power_dbm', power_dbm)
 
         return {
             "success": True,
@@ -183,11 +207,16 @@ async def set_rlaser_power(
 @router.get("/{laser_number}/wavelength")
 async def get_rlaser_wavelength(
     ctp: Annotated[CTP10, Depends(get_ctp10)],
+    manager: Annotated[CTP10Manager, Depends(get_ctp10_manager)],
     laser_number: int = Path(ge=1, le=10)
 ):
     """Get reference laser wavelength in nm."""
     try:
-        wavelength_nm = ctp.rlaser[laser_number].wavelength_nm
+        lock = manager.scpi_lock
+
+        async with lock:
+            laser = await asyncio.to_thread(lambda: ctp.rlaser[laser_number])
+            wavelength_nm = await asyncio.to_thread(lambda: laser.wavelength_nm)
 
         return {
             "laser_number": laser_number,
@@ -204,6 +233,7 @@ async def get_rlaser_wavelength(
 async def set_rlaser_wavelength(
     wavelength_nm: float,
     ctp: Annotated[CTP10, Depends(get_ctp10)],
+    manager: Annotated[CTP10Manager, Depends(get_ctp10_manager)],
     laser_number: int = Path(ge=1, le=10)
 ):
     """
@@ -212,7 +242,11 @@ async def set_rlaser_wavelength(
     Sets the laser emission wavelength (static control).
     """
     try:
-        ctp.rlaser[laser_number].wavelength_nm = wavelength_nm
+        lock = manager.scpi_lock
+
+        async with lock:
+            laser = await asyncio.to_thread(lambda: ctp.rlaser[laser_number])
+            await asyncio.to_thread(setattr, laser, 'wavelength_nm', wavelength_nm)
 
         return {
             "success": True,
@@ -230,6 +264,7 @@ async def set_rlaser_wavelength(
 @router.get("/{laser_number}/state")
 async def get_rlaser_state(
     ctp: Annotated[CTP10, Depends(get_ctp10)],
+    manager: Annotated[CTP10Manager, Depends(get_ctp10_manager)],
     laser_number: int = Path(ge=1, le=10)
 ):
     """
@@ -238,7 +273,11 @@ async def get_rlaser_state(
     Returns True/1 if laser is ON, False/0 if OFF.
     """
     try:
-        state = ctp.rlaser[laser_number].power_state_enabled
+        lock = manager.scpi_lock
+
+        async with lock:
+            laser = await asyncio.to_thread(lambda: ctp.rlaser[laser_number])
+            state = await asyncio.to_thread(lambda: laser.power_state_enabled)
 
         return {
             "laser_number": laser_number,
@@ -255,6 +294,7 @@ async def get_rlaser_state(
 @router.post("/{laser_number}/on")
 async def turn_on_rlaser(
     ctp: Annotated[CTP10, Depends(get_ctp10)],
+    manager: Annotated[CTP10Manager, Depends(get_ctp10_manager)],
     laser_number: int = Path(ge=1, le=10)
 ):
     """
@@ -263,7 +303,11 @@ async def turn_on_rlaser(
     Enables the laser optical output. This operation can take time.
     """
     try:
-        ctp.rlaser[laser_number].power_state_enabled = True
+        lock = manager.scpi_lock
+
+        async with lock:
+            laser = await asyncio.to_thread(lambda: ctp.rlaser[laser_number])
+            await asyncio.to_thread(setattr, laser, 'power_state_enabled', True)
 
         return {
             "success": True,
@@ -281,6 +325,7 @@ async def turn_on_rlaser(
 @router.post("/{laser_number}/off")
 async def turn_off_rlaser(
     ctp: Annotated[CTP10, Depends(get_ctp10)],
+    manager: Annotated[CTP10Manager, Depends(get_ctp10_manager)],
     laser_number: int = Path(ge=1, le=10)
 ):
     """
@@ -289,7 +334,11 @@ async def turn_off_rlaser(
     Disables the laser optical output. This operation can take time.
     """
     try:
-        ctp.rlaser[laser_number].power_state_enabled = False
+        lock = manager.scpi_lock
+
+        async with lock:
+            laser = await asyncio.to_thread(lambda: ctp.rlaser[laser_number])
+            await asyncio.to_thread(setattr, laser, 'power_state_enabled', False)
 
         return {
             "success": True,

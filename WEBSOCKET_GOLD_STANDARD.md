@@ -83,12 +83,12 @@ This document describes the **production-ready** WebSocket implementation with h
 ```python
 # app/main.py
 
-from app.routers import connection, detector, measurement, tls, rlaser, websocket, websocket_v2
+from app.routers import connection, detector, measurement, tls, rlaser, websocket, websocket
 
 # ... existing code ...
 
 # Include the V2 WebSocket router
-app.include_router(websocket_v2.router)
+app.include_router(websocket.router)
 ```
 
 ### Step 2: Test the Endpoint
@@ -98,7 +98,7 @@ app.include_router(websocket_v2.router)
 MOCK_MODE=true fastapi dev app/main.py --port=8002
 
 # Terminal 2: Test with wscat (install: npm install -g wscat)
-wscat -c "ws://localhost:8002/api/v1/ws/v2/power?module=4&interval=0.1"
+wscat -c "ws://localhost:8002/api/v1/ws/power?module=4&interval=0.1"
 
 # You should see:
 # Connected
@@ -112,7 +112,7 @@ wscat -c "ws://localhost:8002/api/v1/ws/v2/power?module=4&interval=0.1"
 For lightweight connection monitoring:
 
 ```bash
-wscat -c "ws://localhost:8002/api/v1/ws/v2/health"
+wscat -c "ws://localhost:8002/api/v1/ws/health"
 
 # Send ping:
 > ping
@@ -146,7 +146,7 @@ function LaserControl() {
     lastMessage,
     reconnectAttempt
   } = useWebSocketWithReconnect({
-    url: `${wsProtocol}//${parsed.host}/api/v1/ws/v2/power?module=${detectorModule}&interval=0.1`,
+    url: `${wsProtocol}//${parsed.host}/api/v1/ws/power?module=${detectorModule}&interval=0.1`,
     shouldConnect: status?.connected === true,
     autoReconnect: true,
     maxReconnectAttempts: 10,
@@ -257,7 +257,7 @@ const { lastMessage, status } = useWebSocketWithReconnect({
 ### Migration Checklist
 
 - [ ] Add `useWebSocketWithReconnect` hook to project
-- [ ] Add `websocket_v2.py` router to backend
+- [ ] Add `websocket.py` router to backend
 - [ ] Update `main.py` to include new router
 - [ ] Replace existing `useEffect` WebSocket code
 - [ ] Add connection status badges to UI
@@ -317,7 +317,7 @@ onError: (error) => {
 ```
 
 ```python
-# Backend monitoring (add to websocket_v2.py)
+# Backend monitoring (add to websocket.py)
 @router.on_event("startup")
 async def log_websocket_stats():
     """Log WebSocket statistics every minute."""
@@ -374,7 +374,7 @@ This gold-standard implementation provides:
 
 ### Next Steps
 
-1. Integrate `websocket_v2.py` into your backend
+1. Integrate `websocket.py` into your backend
 2. Replace frontend WebSocket with `useWebSocketWithReconnect`
 3. Test all scenarios (normal, restart, network drop)
 4. Add monitoring/analytics
