@@ -12,7 +12,7 @@ import requests
 import sys
 
 # API Configuration
-API_BASE = "http://localhost:8015"
+API_BASE = "http://localhost:8002"
 
 # Test configuration
 MODULE = 4
@@ -191,19 +191,13 @@ def test_measurement():
     print("=" * 60)
 
     try:
-        # Get resolution (separate endpoint)
-        response = requests.get(f"{API_BASE}/measurement/resolution")
-        response.raise_for_status()
-        resolution_data = response.json()
-        print(f"✓ Resolution: {resolution_data['resolution_pm']:.2f} pm")
-
-        # Get sweep configuration (stabilization only)
-        response = requests.get(f"{API_BASE}/measurement/config")
+        # Get detector stabilization configuration
+        response = requests.get(f"{API_BASE}/detector/stabilization")
         response.raise_for_status()
         data = response.json()
-        print(f"✓ Sweep configuration:")
-        print(f"  Stabilization output: {data['stabilization_output']}")
-        print(f"  Stabilization duration: {data['stabilization_duration']} s")
+        print(f"✓ Detector stabilization:")
+        print(f"  Output: {data['output']}")
+        print(f"  Duration: {data['duration_seconds']} s")
 
         # Get sweep status
         response = requests.get(f"{API_BASE}/measurement/sweep/status")

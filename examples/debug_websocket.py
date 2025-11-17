@@ -4,12 +4,24 @@ Debug WebSocket messages to see the actual data being sent.
 """
 import asyncio
 import json
+import requests
 import websockets
 
-WS_URL = "ws://localhost:8000/ws/power?module=4&interval=0.1"
+API_BASE = "http://localhost:8002"
+WS_URL = "ws://localhost:8002/ws/v2/power?module=4&interval=0.1"
 
 async def monitor_websocket():
-    print(f"Connecting to {WS_URL}...")
+    # First, ensure we're connected via REST API
+    print("Connecting to CTP10 via REST API...")
+    try:
+        response = requests.post(f"{API_BASE}/connection/connect")
+        response.raise_for_status()
+        print(f"Connected: {response.json()['instrument_id']}\n")
+    except Exception as e:
+        print(f"Warning: Could not connect via REST: {e}")
+        print("Continuing anyway (may be in mock mode)...\n")
+    
+    print(f"Connecting to WebSocket: {WS_URL}...")
 
     async with websockets.connect(WS_URL) as websocket:
         print("Connected! Receiving messages...\n")

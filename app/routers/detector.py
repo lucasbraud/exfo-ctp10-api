@@ -12,7 +12,7 @@ from pymeasure.instruments.exfo import CTP10
 from app.config import settings
 from app.dependencies import get_ctp10, get_ctp10_manager
 from app.manager import CTP10Manager
-from app.models import DetectorConfig, DetectorSnapshot, TraceDataResponse, TraceMetadata
+from app.models import DetectorConfig, DetectorSnapshot, TraceDataResponse, TraceMetadata, StabilizationConfig
 
 router = APIRouter(prefix="/detector", tags=["Detector"])
 logger = logging.getLogger(__name__)
@@ -182,6 +182,48 @@ async def set_detector_config(
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to set config: {str(e)}")
+
+
+# ============================================================================
+# Stabilization (Device-Level Configuration)
+# ============================================================================
+
+
+@router.get("/stabilization")
+async def get_stabilization(ctp: Annotated[CTP10, Depends(get_ctp10)]):
+    """Get laser stabilization settings (output state, duration)."""
+    try:
+        output, duration = ctp.stabilization
+        # Convert integer to boolean (0=False, 1=True)
+        output_bool = bool(output)
+        return {
+            "output": output_bool,
+            "duration_seconds": duration
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get stabilization: {str(e)}")
+
+
+@router.post("/stabilization")
+async def set_stabilization(
+    config: StabilizationConfig,
+    ctp: Annotated[CTP10, Depends(get_ctp10)]
+):
+    """Set laser stabilization settings."""
+    if not (0 <= config.duration_seconds <= 60):
+        raise HTTPException(status_code=400, detail="Duration must be 0-60 seconds")
+
+    try:
+        # Convert boolean to integer (0 or 1) for the device
+        output_int = 1 if config.output else 0
+        ctp.stabilization = (output_int, config.duration_seconds)
+        return {
+            "success": True,
+            "output": config.output,
+            "duration_seconds": config.duration_seconds
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to set stabilization: {str(e)}")
 
 
 @router.post("/reference")

@@ -134,19 +134,20 @@ class TraceDataResponse(BaseModel):
 
 
 # ============================================================================
-# Measurement/Sweep Models
+# Detector Stabilization Models
 # ============================================================================
 
 
-class SweepConfig(BaseModel):
-    """Global sweep configuration."""
+class StabilizationConfig(BaseModel):
+    """Device-level stabilization configuration."""
 
-    stabilization_output: Optional[bool] = Field(
-        None, description="Laser output after scan (False=OFF, True=ON)"
-    )
-    stabilization_duration: Optional[float] = Field(
-        None, ge=0.0, le=60.0, description="Stabilization time in seconds"
-    )
+    output: bool = Field(description="Laser output after scan (False=OFF, True=ON)")
+    duration_seconds: float = Field(ge=0.0, le=60.0, description="Stabilization time in seconds")
+
+
+# ============================================================================
+# Measurement/Sweep Models
+# ============================================================================
 
 
 class SweepStatus(BaseModel):

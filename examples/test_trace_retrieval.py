@@ -26,7 +26,7 @@ import matplotlib.pyplot as plt
 import io
 
 # API Configuration
-API_BASE = "http://localhost:8015"
+API_BASE = "http://localhost:8002"
 MODULE = 4  # Module number (SENSe[1-20])
 CHANNEL = 1  # Detector channel (CHANnel[1-6])
 
@@ -75,14 +75,15 @@ def main():
     # 4. Enable stabilization output (True)
     print("\nConfiguring stabilization (laser output after scan)...")
     response = requests.post(
-        f"{API_BASE}/measurement/config",
+        f"{API_BASE}/detector/stabilization",
         json={
-            "stabilization_output": True,
-            "stabilization_duration": 0.0
+            "output": True,
+            "duration_seconds": 0.0
         }
     )
     response.raise_for_status()
-    print(f"  {response.json()['message']}")
+    result = response.json()
+    print(f"  Stabilization configured: output={result['output']}, duration={result['duration_seconds']}s")
 
     # 5. Read current sweep configuration
     print("\nCurrent sweep configuration:")
@@ -99,12 +100,12 @@ def main():
     detector_config = response.json()
     print(f"  Resolution: {detector_config['resolution_pm']:.2f} pm")
     
-    # Get measurement config (stabilization)
-    response = requests.get(f"{API_BASE}/measurement/config")
+    # Get detector stabilization config
+    response = requests.get(f"{API_BASE}/detector/stabilization")
     response.raise_for_status()
     config = response.json()
-    print(f"  Stabilization output: {config['stabilization_output']}")
-    print(f"  Stabilization duration: {config['stabilization_duration']} s")
+    print(f"  Stabilization output: {config['output']}")
+    print(f"  Stabilization duration: {config['duration_seconds']} s")
 
     # Get TLS1 configuration
     response = requests.get(f"{API_BASE}/tls/1/config")
