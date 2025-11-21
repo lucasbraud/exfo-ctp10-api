@@ -165,34 +165,15 @@ class FakeTLS:
 
     def __init__(self, channel: int):
         self.channel = channel
-        # Default to O-band laser (identifier 2) for TLS1
-        # Settings change when identifier is set to different laser
+        # Initialize with default O-band configuration
+        # Identifier indicates which reference laser is used, but doesn't
+        # automatically change TLS parameters (matches real hardware behavior)
         self._identifier = 2  # Default to O-band laser
-        self._update_settings_for_laser()
-
-    def _update_settings_for_laser(self):
-        """Update TLS settings based on selected laser identifier."""
-        if self._identifier == 1:
-            # C-band laser configuration
-            self._start_wavelength_nm = 1502.0
-            self._stop_wavelength_nm = 1627.0
-            self._trigin = 1
-            self._sweep_speed_nmps = 20
-            self._laser_power_dbm = 8.0
-        elif self._identifier == 2:
-            # O-band laser configuration
-            self._start_wavelength_nm = 1262.5
-            self._stop_wavelength_nm = 1355.0
-            self._trigin = 2
-            self._sweep_speed_nmps = 20
-            self._laser_power_dbm = 10.0
-        else:
-            # Default/unassigned
-            self._start_wavelength_nm = 1500.0
-            self._stop_wavelength_nm = 1600.0
-            self._trigin = 0
-            self._sweep_speed_nmps = 20
-            self._laser_power_dbm = 5.0
+        self._start_wavelength_nm = 1262.5  # O-band default
+        self._stop_wavelength_nm = 1355.0
+        self._trigin = 2
+        self._sweep_speed_nmps = 20
+        self._laser_power_dbm = 10.0
 
     @property
     def start_wavelength_nm(self) -> float:
@@ -240,10 +221,13 @@ class FakeTLS:
 
     @identifier.setter
     def identifier(self, value: int):
-        """Set laser identifier without resetting other parameters.
+        """Set laser identifier.
         
-        The identifier just indicates which reference laser the TLS is using,
-        but the TLS parameters (wavelength, power, etc.) should remain as configured.
+        The identifier indicates which reference laser the TLS is using for
+        wavelength calibration. Unlike the previous implementation, this does NOT
+        automatically reset wavelength, power, or trigger settings - matching real
+        CTP10 hardware behavior where the identifier is just a reference and the
+        TLS parameters remain as configured.
         """
         self._identifier = value
 
