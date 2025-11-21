@@ -36,14 +36,6 @@ async def lifespan(app: FastAPI):
             ctp = app.state.ctp10_manager.connect()
             logger.info(f"Auto-connect successful: {ctp.id}")
 
-            # Set default wavelength on detector module
-            try:
-                detector = ctp.detector(module=settings.DEFAULT_MODULE, channel=settings.DEFAULT_CHANNEL)
-                detector.wavelength_nm = settings.DEFAULT_WAVELENGTH_NM
-                logger.info(f"Set default wavelength to {settings.DEFAULT_WAVELENGTH_NM} nm on module {settings.DEFAULT_MODULE}")
-            except Exception as e:
-                logger.warning(f"Failed to set default wavelength: {e}")
-
         except Exception as e:
             logger.warning(f"Auto-connect failed: {e}")
             logger.info("API is still running for manual connect")
