@@ -156,3 +156,29 @@ class SweepStatus(BaseModel):
     is_sweeping: bool = Field(description="True if scan is running")
     is_complete: bool = Field(description="True if scan completed")
     condition_register: int = Field(description="Raw condition register value")
+
+
+class SweepWavelengthConfig(BaseModel):
+    """Instrument-level sweep wavelength configuration (CTP10, not TLS channel).
+
+    These correspond to the global sweep start/stop wavelengths exposed directly
+    by the CTP10 firmware (e.g. SCPI INITiate:WAVelength:STARt / STOP) and are
+    distinct from TLS channel-specific settings in TLSConfig.
+
+    Note: The instrument may adjust one value automatically when the other is
+    set, to enforce valid ranges and minimum/maximum span constraints. Always
+    re-query after setting to obtain the effective values.
+    """
+
+    start_wavelength_nm: float | None = Field(
+        None,
+        ge=1200.0,
+        le=1700.0,
+        description="Global sweep start wavelength (nm)."
+    )
+    stop_wavelength_nm: float | None = Field(
+        None,
+        ge=1200.0,
+        le=1700.0,
+        description="Global sweep stop wavelength (nm)."
+    )

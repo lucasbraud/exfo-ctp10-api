@@ -158,6 +158,7 @@ The API follows a hardware-centric structure matching the CTP10 architecture:
 - `/measurement/sweep/start?wait=false` - Initiate sweep
 - `/measurement/sweep/abort` - Abort sweep
 - `/measurement/sweep/status` - Get sweep status
+- `/measurement/sweep/wavelengths` - Get/set global instrument sweep start/stop wavelengths (CTP10-level)
 
 ### TLS (Channels 1-4)
 
@@ -254,3 +255,25 @@ http://localhost:8000/docs
 - [Pymeasure CTP10 Driver](https://github.com/lucasbraud/pymeasure/tree/dev-all-instruments)
 - [Pymeasure Examples](https://github.com/lucasbraud/pymeasure/tree/dev-all-instruments/examples/exfo)
 - [EXFO CTP10 Documentation](https://www.exfo.com/en/products/optical-test/lab-and-manufacturing-solutions/ctp10-component-test-platform/)
+
+---
+
+### 4. `instrument_sweep_wavelength.py`
+
+**Purpose**: Demonstrates instrument-level (global) sweep wavelength configuration distinct from TLS channel settings.
+
+**Features**:
+- Query current global sweep start/stop wavelengths
+- Set one or both limits and view effective (normalized) values returned by firmware
+- Re-query to confirm final state
+
+**Usage**:
+```bash
+python examples/instrument_sweep_wavelength.py --host http://localhost:8000 --start 1525 --stop 1565
+```
+
+**Key Endpoint Used**:
+- `GET /measurement/sweep/wavelengths`
+- `POST /measurement/sweep/wavelengths`
+
+Note: These limits are global and may auto-adjust interplay; always re-query after setting.

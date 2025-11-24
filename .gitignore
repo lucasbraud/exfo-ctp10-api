@@ -21,6 +21,7 @@ uv.lock
 .idea/
 *.swp
 *.swo
+.claude
 
 # Testing
 .pytest_cache/

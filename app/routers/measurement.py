@@ -8,7 +8,7 @@ from pymeasure.instruments.exfo import CTP10
 
 from app.dependencies import get_ctp10, get_ctp10_manager
 from app.manager import CTP10Manager
-from app.models import SweepStatus
+from app.models import SweepStatus, SweepWavelengthConfig
 
 router = APIRouter(prefix="/measurement", tags=["Measurement"])
 
@@ -105,3 +105,64 @@ async def get_sweep_status(
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get status: {str(e)}")
+
+
+# ============================================================================
+# Global Sweep Wavelength Configuration (Instrument-Level, NOT TLS channel)
+# ============================================================================
+
+
+@router.get("/sweep/wavelengths", response_model=SweepWavelengthConfig)
+async def get_sweep_wavelengths(
+    ctp: Annotated[CTP10, Depends(get_ctp10)],
+    manager: Annotated[CTP10Manager, Depends(get_ctp10_manager)]
+):
+    """Get global sweep start and stop wavelengths (nm).
+
+    These are instrument-level sweep boundaries distinct from TLS channel
+    configuration. Values are returned in nanometers.
+    """
+    try:
+        lock = manager.scpi_lock
+        async with lock:
+            start_nm = await asyncio.to_thread(lambda: ctp.start_wavelength_nm)
+            stop_nm = await asyncio.to_thread(lambda: ctp.stop_wavelength_nm)
+        return SweepWavelengthConfig(start_wavelength_nm=start_nm, stop_wavelength_nm=stop_nm)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get sweep wavelengths: {str(e)}")
+
+
+@router.post("/sweep/wavelengths", response_model=SweepWavelengthConfig)
+async def set_sweep_wavelengths(
+    config: SweepWavelengthConfig,
+    ctp: Annotated[CTP10, Depends(get_ctp10)],
+    manager: Annotated[CTP10Manager, Depends(get_ctp10_manager)]
+):
+    """Set global sweep start/stop wavelengths; returns effective values.
+
+    If both start and stop wavelengths are provided they are applied in order:
+    start then stop. The instrument may internally adjust one after the other
+    to maintain valid span constraints; the returned values reflect the final
+    effective configuration after any firmware normalization.
+    """
+    try:
+        if config.start_wavelength_nm is None and config.stop_wavelength_nm is None:
+            raise HTTPException(status_code=400, detail="Provide at least one of start_wavelength_nm or stop_wavelength_nm")
+
+        lock = manager.scpi_lock
+        async with lock:
+            # Apply in deterministic order
+            if config.start_wavelength_nm is not None:
+                await asyncio.to_thread(setattr, ctp, 'start_wavelength_nm', config.start_wavelength_nm)
+            if config.stop_wavelength_nm is not None:
+                await asyncio.to_thread(setattr, ctp, 'stop_wavelength_nm', config.stop_wavelength_nm)
+
+            # Re-query to get effective values
+            effective_start = await asyncio.to_thread(lambda: ctp.start_wavelength_nm)
+            effective_stop = await asyncio.to_thread(lambda: ctp.stop_wavelength_nm)
+
+        return SweepWavelengthConfig(start_wavelength_nm=effective_start, stop_wavelength_nm=effective_stop)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to set sweep wavelengths: {str(e)}")

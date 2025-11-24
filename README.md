@@ -279,6 +279,23 @@ ruff check app/
 mypy app/
 ```
 
+### Updating Pymeasure Dependency
+
+This project uses a custom fork of Pymeasure from the `dev-all-instruments` branch. When changes are made to that branch, you need to update the lock file:
+
+```bash
+# Update pymeasure to latest commit from dev-all-instruments branch
+uv lock --upgrade-package pymeasure
+
+# Install the updated version
+uv sync
+
+# Restart the FastAPI server to load the new version
+# (Stop the server with Ctrl+C and restart it)
+```
+
+**Why this is needed:** UV locks dependencies to specific git commits in `uv.lock`. Running `uv sync` alone will install the locked commit, not the latest one. You must use `uv lock --upgrade-package pymeasure` to fetch and lock the latest commit from the branch.
+
 ---
 
 ## 📊 Project Status
