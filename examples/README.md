@@ -29,7 +29,30 @@ fastapi dev app/main.py --port 8002
 
 ## Example Scripts
 
-### 1. `test_snapshot.py`
+### 1. `instrument_detector_wavelength.py`
+
+**Purpose**: Demonstrates detector wavelength configuration for O-band and C-band measurements.
+
+**Features**:
+- Read current detector wavelength setting
+- Set wavelength to 1310 nm (O-band) or 1550 nm (C-band)
+- Verify wavelength was set correctly
+- Important for accurate power measurement calibration
+
+**Usage**:
+```bash
+python examples/instrument_detector_wavelength.py
+```
+
+**Key Endpoints Used**:
+- `GET /detector/wavelength` - Get detector wavelength
+- `POST /detector/wavelength?wavelength_nm=1310` - Set detector wavelength
+
+**Note**: On IL RL OPM2 modules, setting wavelength on one channel applies to all channels.
+
+---
+
+### 2. `test_snapshot.py`
 
 **Purpose**: Demonstrates the simplified 4-channel power snapshot API.
 

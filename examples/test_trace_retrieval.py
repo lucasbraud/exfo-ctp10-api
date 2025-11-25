@@ -1,24 +1,21 @@
 #!/usr/bin/env python3
 """
-EXFO CTP10 API - Detector Channel and Trace Retrieval Example
+EXFO CTP10 API - Trace Retrieval with Sweep Example
 
-This script demonstrates the detector-centric API for accessing
-trace data on the EXFO CTP10 via REST API.
+This script retrieves configuration, initiates a sweep, and downloads
+trace data from the EXFO CTP10 via REST API without changing any settings.
 
 Key Features:
-- Access detectors via API endpoints with module/channel parameters
-- Detector-level operations: power, trigger, units, create_reference
+- Read current instrument configuration (TLS, detector, stabilization)
+- Initiate sweep with existing parameters
 - Trace data retrieval with explicit trace_type parameter:
   * trace_type=1: TF live trace (Transmission Function)
   * trace_type=11: Raw live trace
   * trace_type=12: Raw reference trace
-  * trace_type=13: Raw quick reference trace
 - Binary trace data download for efficiency (~940k points)
 
-Based on: pymeasure-examples/exfo/exfo_ctp10_detector_example.py
-
 Author: API Example
-Date: November 10, 2025
+Date: November 24, 2025
 """
 import requests
 import numpy as np
@@ -40,53 +37,8 @@ def main():
     response.raise_for_status()
     print(f"Connected: {response.json()['instrument_id']}\n")
 
-    # 2. Configure TLS1 parameters
-    print("Configuring TLS1 for O-band...")
-    # Setting identifier=2 automatically configures O-band parameters:
-    # - Wavelength range: 1262.5-1355.0 nm
-    # - Sweep speed: 20 nm/s
-    # - Laser power: 10.0 dBm
-    # - Trigin: 2
-    tls_config = {
-        "identifier": 2  # O-band laser (auto-configures all parameters)
-    }
-    response = requests.post(f"{API_BASE}/tls/1/config", json=tls_config)
-    response.raise_for_status()
-    print(f"  {response.json()['message']}")
-
-    # 3. Configure detector settings (including resolution)
-    print("Configuring detector settings...")
-    detector_config = {
-        "power_unit": "DBM",
-        "spectral_unit": "WAV",
-        "resolution_pm": 0.1
-    }
-    response = requests.post(
-        f"{API_BASE}/detector/config",
-        params={
-            "module": MODULE,
-            "channel": CHANNEL
-        },
-        json=detector_config
-    )
-    response.raise_for_status()
-    print(f"  {response.json()['message']}")
-
-    # 4. Enable stabilization output (True)
-    print("\nConfiguring stabilization (laser output after scan)...")
-    response = requests.post(
-        f"{API_BASE}/detector/stabilization",
-        json={
-            "output": True,
-            "duration_seconds": 0.0
-        }
-    )
-    response.raise_for_status()
-    result = response.json()
-    print(f"  Stabilization configured: output={result['output']}, duration={result['duration_seconds']}s")
-
-    # 5. Read current sweep configuration
-    print("\nCurrent sweep configuration:")
+    # 2. Read current sweep configuration
+    print("Current sweep configuration:")
     
     # Get detector config (includes resolution)
     response = requests.get(
@@ -119,7 +71,7 @@ def main():
     print(f"  TLS1 Power: {tls_config['laser_power_dbm']:.2f} dBm")
     print(f"  TLS1 Trigger Input: {tls_config['trigin']}")
 
-    # 6. Initiate sweep and wait for completion
+    # 3. Initiate sweep and wait for completion
     print("\nInitiating sweep...")
     response = requests.post(
         f"{API_BASE}/measurement/sweep/start",
@@ -128,7 +80,7 @@ def main():
     response.raise_for_status()
     print(f"  {response.json()['message']}")
 
-    # 7. Get detector power snapshot
+    # 4. Get detector power snapshot
     print(f"\nGetting detector power snapshot (Module {MODULE}, Channel {CHANNEL})...")
     response = requests.get(
         f"{API_BASE}/detector/snapshot",
@@ -138,7 +90,7 @@ def main():
     snapshot = response.json()
     print(f"  Current power (CH{CHANNEL}): {snapshot[f'ch{CHANNEL}_power']:.2f} {snapshot['unit']}")
 
-        # 7. Get trace metadata before downloading
+    # 5. Get trace metadata
     print("\nAccessing trace metadata...")
     trace_types = [
         (1, "TF live"),
@@ -159,11 +111,8 @@ def main():
         metadata = response.json()
         print(f"  - {trace_name} (trace_type={trace_type})")
         print(f"    Length: {metadata['num_points']} points")
-    # Sampling omitted; resolution is reported in detector config
 
-    # 8. Download trace data in binary format (efficient)
-
-    # 8. Download trace data in binary format (efficient)
+    # 6. Download trace data in binary format (efficient)
     print("\nDownloading trace data in binary format...")
     print("  Note: Large dataset (~940k points), using binary NPY format...")
 
@@ -198,19 +147,7 @@ def main():
         print(f"    Wavelength range: {wavelengths[0]:.4f} - {wavelengths[-1]:.4f} nm")
         print(f"    Power range: {values.min():.2f} to {values.max():.2f} dB")
 
-    # 9. Optional: Create reference trace
-    # print("\nCreating reference trace...")
-    # response = requests.post(
-    #     f"{API_BASE}/detector/reference",
-    #     params={
-    #         "module": MODULE,
-    #         "channel": CHANNEL
-    #     }
-    # )
-    # response.raise_for_status()
-    # print(f"  {response.json()['message']}")
-
-    # 10. Plot the results
+    # 7. Plot the results
     print("\nGenerating plot...")
     plt.figure(figsize=(14, 7))
 

@@ -110,6 +110,82 @@ async def get_detector_snapshot(
         raise HTTPException(status_code=500, detail=f"Failed to get detector snapshot: {str(e)}")
 
 
+@router.get("/wavelength")
+async def get_detector_wavelength(
+    ctp: Annotated[CTP10, Depends(get_ctp10)],
+    manager: Annotated[CTP10Manager, Depends(get_ctp10_manager)],
+    module: int = Query(default=settings.DEFAULT_MODULE, ge=1, le=20),
+    channel: int = Query(default=settings.DEFAULT_CHANNEL, ge=1, le=6),
+):
+    """
+    Get detector wavelength setting.
+
+    This is the wavelength or frequency of the signal received on the detector (static control).
+    Range: 1240 to 1680 nm (178.4479 to 241.7681 THz).
+    Not available on PCM detectors or if the detector is scanning.
+
+    On IL RL OPM2 modules, setting wavelength on TLS IN, Out to SCAN SYNC, or Out to DUT
+    also applies to the two other connectors of the module.
+    """
+    try:
+        logger.debug(f"Getting detector wavelength for module={module}, channel={channel}")
+        lock = manager.scpi_lock
+
+        async with lock:
+            detector = await asyncio.to_thread(ctp.detector, module=module, channel=channel)
+            wavelength_nm = await asyncio.to_thread(lambda: detector.wavelength_nm)
+            frequency_thz = await asyncio.to_thread(lambda: detector.frequency_thz)
+
+        return {
+            "module": module,
+            "channel": channel,
+            "wavelength_nm": wavelength_nm,
+            "frequency_thz": frequency_thz
+        }
+    except Exception as e:
+        logger.error(f"Failed to get detector wavelength: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to get wavelength: {str(e)}")
+
+
+@router.post("/wavelength")
+async def set_detector_wavelength(
+    ctp: Annotated[CTP10, Depends(get_ctp10)],
+    manager: Annotated[CTP10Manager, Depends(get_ctp10_manager)],
+    module: int = Query(default=settings.DEFAULT_MODULE, ge=1, le=20),
+    channel: int = Query(default=settings.DEFAULT_CHANNEL, ge=1, le=6),
+    wavelength_nm: float = Query(..., ge=1240.0, le=1680.0, description="Wavelength in nanometers (1240-1680 nm)"),
+):
+    """
+    Set detector wavelength setting.
+
+    Sets the wavelength of the signal received on the detector (static control).
+    Range: 1240 to 1680 nm (178.4479 to 241.7681 THz).
+    Not available on PCM detectors or if the detector is scanning.
+
+    On IL RL OPM2 modules, setting wavelength on TLS IN, Out to SCAN SYNC, or Out to DUT
+    also applies to the two other connectors of the module.
+    """
+    try:
+        logger.debug(f"Setting detector wavelength for module={module}, channel={channel} to {wavelength_nm} nm")
+        lock = manager.scpi_lock
+
+        async with lock:
+            detector = await asyncio.to_thread(ctp.detector, module=module, channel=channel)
+            await asyncio.to_thread(setattr, detector, 'wavelength_nm', wavelength_nm)
+            # Read back to verify
+            new_wavelength = await asyncio.to_thread(lambda: detector.wavelength_nm)
+
+        return {
+            "success": True,
+            "module": module,
+            "channel": channel,
+            "wavelength_nm": new_wavelength
+        }
+    except Exception as e:
+        logger.error(f"Failed to set detector wavelength: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to set wavelength: {str(e)}")
+
+
 @router.get("/config")
 async def get_detector_config(
     ctp: Annotated[CTP10, Depends(get_ctp10)],
@@ -153,6 +229,13 @@ async def get_detector_config(
             except Exception as e:
                 logger.warning(f"Failed to get resolution_pm: {e}")
                 config["resolution_pm"] = None
+
+            try:
+                config["wavelength_nm"] = await asyncio.to_thread(lambda: detector.wavelength_nm)
+                logger.debug(f"Got wavelength_nm: {config['wavelength_nm']}")
+            except Exception as e:
+                logger.warning(f"Failed to get wavelength_nm: {e}")
+                config["wavelength_nm"] = None
 
         return config
     except Exception as e:
