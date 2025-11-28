@@ -35,24 +35,6 @@ async def connect_to_ctp10(
     try:
         ctp = manager.connect()
 
-        # Set default wavelength on detector module
-        # Note: On IL RL OPM2 modules, setting wavelength on one channel applies to all
-        try:
-            detector = await asyncio.to_thread(
-                ctp.detector,
-                module=settings.DEFAULT_MODULE,
-                channel=settings.DEFAULT_CHANNEL
-            )
-            await asyncio.to_thread(
-                setattr,
-                detector,
-                'wavelength_nm',
-                settings.DEFAULT_WAVELENGTH_NM
-            )
-            logger.info(f"Set default wavelength to {settings.DEFAULT_WAVELENGTH_NM} nm on module {settings.DEFAULT_MODULE}")
-        except Exception as e:
-            logger.warning(f"Failed to set default wavelength: {e}")
-
         return ConnectionStatus(
             connected=True,
             instrument_id=ctp.id,
