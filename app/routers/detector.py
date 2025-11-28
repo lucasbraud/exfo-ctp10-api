@@ -337,21 +337,149 @@ async def create_reference(
     manager: Annotated[CTP10Manager, Depends(get_ctp10_manager)],
     module: int = Query(default=settings.DEFAULT_MODULE, ge=1, le=20),
     channel: int = Query(default=settings.DEFAULT_CHANNEL, ge=1, le=6),
+    wait: bool = Query(default=False, description="Wait for referencing to complete before returning"),
 ):
-    """Create reference trace for detector channel."""
+    """
+    Create reference trace for detector channel.
+
+    This triggers the instrument's :REFerence:SENSe{module}:CHANnel{channel}:INITiate
+    command, which performs an internal scan and stores the result as the reference trace.
+
+    The referencing operation sets bit 6 (weight 64) in the Operational Status Condition
+    Register while in progress.
+
+    Parameters:
+    - wait: If True, blocks until referencing completes (recommended). If False, returns
+      immediately and you must poll GET /measurement/status/referencing to check progress.
+
+    After completion, use GET /detector/reference/result to verify the reference was created.
+
+    Example with wait:
+        POST /detector/reference?module=4&channel=1&wait=true
+        (blocks until complete, may take 10-30 seconds)
+
+    Example without wait:
+        POST /detector/reference?module=4&channel=1
+        (returns immediately, poll /measurement/status/referencing)
+    """
     try:
         lock = manager.scpi_lock
 
         async with lock:
             detector = await asyncio.to_thread(ctp.detector, module=module, channel=channel)
+            # Initiate reference creation
             await asyncio.to_thread(detector.create_reference)
 
+            if wait:
+                # Wait for referencing to complete (similar to sweep logic)
+                logger.info(f"Waiting for reference completion on {module}/{channel}...")
+
+                # Brief delay to allow command to take effect
+                await asyncio.sleep(0.5)
+
+                # Check if referencing started
+                is_referencing = await asyncio.to_thread(lambda: ctp.referencing)
+                condition = await asyncio.to_thread(lambda: ctp.condition_register)
+
+                if is_referencing:
+                    logger.info(f"Referencing started (condition: {condition})")
+                else:
+                    logger.warning(f"Referencing bit not set (condition: {condition})")
+
+                # Wait for completion (max 60 seconds for reference)
+                max_wait_seconds = 60
+                start_time = asyncio.get_event_loop().time()
+
+                while True:
+                    await asyncio.sleep(0.5)
+                    is_referencing = await asyncio.to_thread(lambda: ctp.referencing)
+
+                    if not is_referencing:
+                        elapsed = asyncio.get_event_loop().time() - start_time
+                        logger.info(f"Referencing completed after {elapsed:.1f}s")
+                        break
+
+                    elapsed = asyncio.get_event_loop().time() - start_time
+                    if elapsed > max_wait_seconds:
+                        raise HTTPException(
+                            status_code=504,
+                            detail=f"Referencing timeout after {max_wait_seconds}s"
+                        )
+
+                # Verify reference was created
+                result = await asyncio.to_thread(lambda: detector.reference_result)
+
+                if result['state'] == 1:
+                    type_desc = 'TF (1 sweep)' if result['type'] == 0 else 'TF/PDL (4 sweeps)'
+                    return {
+                        "success": True,
+                        "message": f"Reference created successfully for detector {module}/{channel}",
+                        "is_complete": True,
+                        "result": {
+                            "state": result['state'],
+                            "type": result['type'],
+                            "type_description": type_desc,
+                            "date": result['date'],
+                            "time": result['time']
+                        }
+                    }
+                else:
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"Reference creation failed: state={result['state']}"
+                    )
+
+        # If wait=False, return immediately
         return {
             "success": True,
-            "message": f"Reference created for detector {module}/{channel}"
+            "message": f"Reference creation initiated for detector {module}/{channel}",
+            "is_complete": False
         }
+
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to create reference: {str(e)}")
+
+
+@router.get("/reference/result")
+async def get_reference_result(
+    ctp: Annotated[CTP10, Depends(get_ctp10)],
+    manager: Annotated[CTP10Manager, Depends(get_ctp10_manager)],
+    module: int = Query(default=settings.DEFAULT_MODULE, ge=1, le=20),
+    channel: int = Query(default=settings.DEFAULT_CHANNEL, ge=1, le=6),
+):
+    """
+    Get the result of the referencing operation for a detector channel.
+
+    Returns information about the reference trace status:
+    - state: Reference validity (0 = no valid reference, 1 = reference is valid)
+    - type: Reference operation type
+      (0 = TF reference (1 sweep), 1 = TF/PDL reference (4 sweeps))
+    - date: Date of the referencing operation in YYYYMMDD format (null if no reference)
+    - time: Time of the referencing operation in HHMMSS format (null if no reference)
+
+    Example responses:
+    - Valid reference: {"state": 1, "type": 0, "date": "20251128", "time": "092631"}
+    - No reference: {"state": 0, "type": null, "date": null, "time": null}
+    """
+    try:
+        lock = manager.scpi_lock
+
+        async with lock:
+            detector = await asyncio.to_thread(ctp.detector, module=module, channel=channel)
+            result = await asyncio.to_thread(lambda: detector.reference_result)
+
+        return {
+            "module": module,
+            "channel": channel,
+            "state": result['state'],
+            "type": result['type'],
+            "date": result['date'],
+            "time": result['time']
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get reference result: {str(e)}")
 
 
 @router.get("/trace/metadata", response_model=TraceMetadata)

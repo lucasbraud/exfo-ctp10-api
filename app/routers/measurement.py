@@ -107,6 +107,39 @@ async def get_sweep_status(
         raise HTTPException(status_code=500, detail=f"Failed to get status: {str(e)}")
 
 
+@router.get("/status/referencing")
+async def get_referencing_status(
+    ctp: Annotated[CTP10, Depends(get_ctp10)],
+    manager: Annotated[CTP10Manager, Depends(get_ctp10_manager)]
+):
+    """
+    Get referencing operation status.
+
+    Checks if the system is currently performing a reference operation.
+    This reads bit 6 (weight 64) of the Operational Status Condition Register.
+
+    Returns:
+        - is_referencing: True if referencing in progress, False otherwise
+        - condition_register: Full condition register value for debugging
+
+    Use this endpoint to monitor reference creation progress after calling
+    POST /detector/reference.
+    """
+    try:
+        lock = manager.scpi_lock
+
+        async with lock:
+            is_referencing = await asyncio.to_thread(lambda: ctp.referencing)
+            condition = await asyncio.to_thread(lambda: ctp.condition_register)
+
+        return {
+            "is_referencing": is_referencing,
+            "condition_register": condition
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get referencing status: {str(e)}")
+
+
 # ============================================================================
 # Global Sweep Wavelength Configuration (Instrument-Level, NOT TLS channel)
 # ============================================================================
